@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（自動で現在地を取得し入力欄に反映）
+# ✅ モバイル向け app_mobile.py（現在地取得・逆ジオコーディング対応・UI調整）
 import streamlit as st
 import pandas as pd
 import requests
@@ -44,14 +44,14 @@ def geocode_address(address, api_key):
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dlat = radians(lat2 - lat1)
-    dlon = radians(lat2 - lon1)
+    dlon = radians(lon2 - lon1)
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 # ------------------------------
 # レイアウトと説明
 # ------------------------------
-st.set_page_config(page_title="売土地検索（スマホ）", layout="centered")
+st.set_page_config(page_title="売土地検索スマホ", layout="centered")
 st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
