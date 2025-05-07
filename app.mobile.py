@@ -60,9 +60,9 @@ st.markdown("現在地または住所を入力して、2km圏内の土地情報�
 # ------------------------------
 location = get_geolocation()
 
-if location:
-    lat = location["latitude"]
-    lon = location["longitude"]
+if location and "coords" in location:
+    lat = location["coords"]["latitude"]
+    lon = location["coords"]["longitude"]
     reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
     address_query = st.text_input("検索用の住所（現在地から取得済み）", value=reverse_address)
 else:
