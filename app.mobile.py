@@ -1,16 +1,16 @@
-# ✅ モバイル向け app_mobile.py（現在地取得・UI改善・異常値除外・CSV削除）
+# ✅ モバイル向け app_mobile.py（高度な現在地取得機能対応）
 import streamlit as st
 import pandas as pd
 import requests
 import folium
 from streamlit_folium import st_folium
 from math import radians, sin, cos, sqrt, atan2
-import streamlit.components.v1 as components
+from streamlit_js_eval import streamlit_js_eval
 
 GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
 # ------------------------------
-# 位置情報の逆ジオコーディング
+# 逆ジオコーディング
 # ------------------------------
 def reverse_geocode(lat, lon, api_key):
     url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lon}&key={api_key}"
@@ -21,7 +21,7 @@ def reverse_geocode(lat, lon, api_key):
     return ""
 
 # ------------------------------
-# ジオコーディング（住所 → 座標）
+# ジオコーディング（住所→座標）
 # ------------------------------
 def geocode_address(address, api_key):
     try:
@@ -39,7 +39,7 @@ def geocode_address(address, api_key):
     return None, None
 
 # ------------------------------
-# 距離計算
+# 距離計算（ハバースイン法）
 # ------------------------------
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
@@ -49,50 +49,21 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 # ------------------------------
-# UI レイアウト
+# レイアウトと説明
 # ------------------------------
 st.set_page_config(page_title="売土地検索（スマホ）", layout="centered")
-st.markdown("""
-<style>
-    .big-button button {
-        font-size: 20px !important;
-        height: 3em !important;
-        width: 100% !important;
-        margin-bottom: 1em;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
 # ------------------------------
-# 位置取得用ボタン（JavaScript）
+# 現在地取得（streamlit-js-eval使用）
 # ------------------------------
-st.markdown('<div class="big-button">', unsafe_allow_html=True)
-components.html("""
-    <script>
-    function getLocation() {
-        navigator.geolocation.getCurrentPosition(
-            function(pos) {
-                const coords = pos.coords.latitude + "," + pos.coords.longitude;
-                const input = window.parent.document.querySelector("iframe").contentWindow.document.querySelector("input#coords_input");
-                if (input) input.value = coords;
-            });
-    }
-    </script>
-    <button onclick="getLocation()">📍 現在地から取得</button>
-    <input type="hidden" id="coords_input" value="" />
-""", height=60)
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("**📍 現在地から自動入力（位置情報を許可してください）**")
+coords = streamlit_js_eval(js_expressions="[navigator.geolocation.getCurrentPosition]", key="get_pos", want_output=True)
 
-coords = st.text_input("現在地（緯度,経度）", key="coords_input")
-
-# ------------------------------
-# 検索住所の入力 or 現在地変換
-# ------------------------------
-if coords and "," in coords:
-    lat, lon = map(float, coords.split(","))
+if coords and isinstance(coords, dict) and "coords" in coords:
+    lat = coords["coords"]["latitude"]
+    lon = coords["coords"]["longitude"]
     reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
     address_query = st.text_input("検索用の住所（現在地から取得済み）", value=reverse_address)
 else:
@@ -106,18 +77,18 @@ if center_lat is None or center_lon is None:
     st.stop()
 
 # ------------------------------
-# データ読み込みとフィルタリング
+# データ読み込みと距離計算
 # ------------------------------
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
 filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
 
-# 異常値上下1件除外
+# 異常値除外
 if len(filtered_df) > 2:
     filtered_df = filtered_df.iloc[1:-1]
 
 # ------------------------------
-# 表示
+# 結果表示
 # ------------------------------
 st.subheader("📋 該当物件一覧")
 display_columns = ['住所', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日']
@@ -130,15 +101,11 @@ st.dataframe(filtered_df[display_columns])
 if not filtered_df.empty:
     st.subheader("🗺️ 地図で確認")
     m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
-
-    # 現在地マーカー
     folium.Marker(
         location=[center_lat, center_lon],
         popup="検索中心（現在地）",
         icon=folium.Icon(color="red", icon="star")
     ).add_to(m)
-
-    # 土地データマーカー
     for _, row in filtered_df.iterrows():
         popup_html = f"""
 <div style='width: 250px;'>
@@ -157,7 +124,6 @@ if not filtered_df.empty:
             tooltip=row['住所'],
             icon=folium.Icon(color="blue", icon="info-sign")
         ).add_to(m)
-
     st_folium(m, width=700, height=500)
 else:
     st.info("該当する物件がありませんでした。")
