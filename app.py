@@ -27,10 +27,9 @@ def haversine(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
-st.set_page_config(page_title="売土地検索（通常版）", layout="wide")
+st.set_page_config(page_title="売土地検索（PC版）", layout="wide")
 st.title("💻 売土地検索（PC版）")
 
-# 🔍 住所入力フォーム
 address_query = st.text_input("中心としたい住所を入力（例：浜松市中区）")
 if not address_query:
     st.stop()
@@ -40,13 +39,11 @@ if center_lat is None or center_lon is None:
     st.error("住所が見つかりませんでした。")
     st.stop()
 
-# 📊 データ読み込みと加工
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
 df['用途地域'] = df['用途地域'].fillna('-').astype(str)
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
 filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
 
-# 📋 表示 + 行選択 + ピン連動
 st.subheader("検索結果とマップ")
 
 if not filtered_df.empty:
@@ -54,13 +51,13 @@ if not filtered_df.empty:
     gb.configure_selection("single", use_checkbox=False)
     grid = AgGrid(filtered_df, gridOptions=gb.build(), height=350, theme="streamlit")
     selected_rows = grid['selected_rows']
-    selected_address = selected_rows[0]['住所'] if isinstance(selected_rows, list) and len(selected_rows) > 0 else None
+    selected_address = selected_rows[0]['住所'].strip() if isinstance(selected_rows, list) and len(selected_rows) > 0 else None
 
     m = folium.Map(location=[center_lat, center_lon], zoom_start=14)
     bounds = []
 
     for _, row in filtered_df.iterrows():
-        color = "red" if row['住所'] == selected_address else "blue"
+        color = "red" if row['住所'].strip() == selected_address else "blue"
         popup_html = f"""
         <div style='width: 250px;'>
             <strong>{row['住所']}</strong><br>

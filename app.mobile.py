@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（PC版に適用可能な選択安全処理）
+# ✅ モバイル向け app_mobile.py（PC版に適用可能な選択安全処理＋ピン色強調修正）
 import streamlit as st
 import pandas as pd
 import requests
@@ -111,13 +111,13 @@ if not filtered_df.empty:
     gb.configure_selection("single", use_checkbox=False)
     grid = AgGrid(filtered_df, gridOptions=gb.build(), height=300, theme="streamlit")
     selected_rows = grid['selected_rows']
-    selected_address = selected_rows[0]['住所'] if isinstance(selected_rows, list) and len(selected_rows) > 0 else None
+    selected_address = selected_rows[0]['住所'].strip() if isinstance(selected_rows, list) and len(selected_rows) > 0 else None
 
     m = folium.Map(zoom_control=False, dragging=False)
     bounds = []
 
     for _, row in filtered_df.iterrows():
-        color = "red" if row['住所'] == selected_address else "blue"
+        color = "red" if row['住所'].strip() == selected_address else "blue"
         popup_html = f"""
         <div style='width: 250px;'>
             <strong>{row['住所']}</strong><br>
