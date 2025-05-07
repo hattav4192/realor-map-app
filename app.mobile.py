@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（ログ付き現在地取得＆安定版）
+# ✅ モバイル向け app_mobile.py（ログ付き現在地取得＆安定版）＋APIレスポンス表示
 import streamlit as st
 import pandas as pd
 import requests
@@ -15,11 +15,12 @@ def geocode_address(address, api_key):
         url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
         response = requests.get(url)
         data = response.json()
+        st.write("📦 Google Maps API レスポンス", data)  # ← 追加デバッグ表示
         if data['status'] == 'OK':
             location = data['results'][0]['geometry']['location']
             return location['lat'], location['lng']
-    except:
-        pass
+    except Exception as e:
+        st.error(f"APIエラー: {e}")
     return None, None
 
 def reverse_geocode(lat, lon, api_key):
