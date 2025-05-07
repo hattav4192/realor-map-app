@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（get_geolocation 関数を使用）
+# ✅ モバイル向け app_mobile.py（現在地取得をボタン制御に変更）
 import streamlit as st
 import pandas as pd
 import requests
@@ -44,7 +44,7 @@ def geocode_address(address, api_key):
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
+    dlon = radians(lat2 - lon1)
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
@@ -56,15 +56,19 @@ st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
 # ------------------------------
-# 現在地取得（get_geolocation 使用）
+# 現在地取得ボタン & 入力欄
 # ------------------------------
-location = get_geolocation()
+use_current_location = st.button("📍 現在地から取得")
 
-if location and "coords" in location:
-    lat = location["coords"]["latitude"]
-    lon = location["coords"]["longitude"]
-    reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
-    address_query = st.text_input("検索用の住所（現在地から取得済み）", value=reverse_address)
+if use_current_location:
+    location = get_geolocation()
+    if location and "coords" in location:
+        lat = location["coords"]["latitude"]
+        lon = location["coords"]["longitude"]
+        reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
+        address_query = st.text_input("検索用の住所（現在地から取得済み）", value=reverse_address)
+    else:
+        address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
 else:
     address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
 
