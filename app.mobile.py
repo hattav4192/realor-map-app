@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（現在地取得をボタン制御に変更＋物件抽出修正）
+# ✅ モバイル向け app_mobile.py（自動で現在地を取得し入力欄に反映）
 import streamlit as st
 import pandas as pd
 import requests
@@ -56,19 +56,14 @@ st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
 # ------------------------------
-# 現在地取得ボタン & 入力欄
+# 現在地取得 → 自動で住所入力欄に反映
 # ------------------------------
-use_current_location = st.button("📍 現在地から取得")
-
-if use_current_location:
-    location = get_geolocation()
-    if location and "coords" in location:
-        lat = location["coords"]["latitude"]
-        lon = location["coords"]["longitude"]
-        reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
-        address_query = st.text_input("検索用の住所（現在地から取得済み）", value=reverse_address)
-    else:
-        address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
+location = get_geolocation()
+if location and "coords" in location:
+    lat = location["coords"]["latitude"]
+    lon = location["coords"]["longitude"]
+    reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
+    address_query = st.text_input("🔍 検索したい中心住所", value=reverse_address)
 else:
     address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
 
@@ -83,13 +78,12 @@ if center_lat is None or center_lon is None:
 # データ読み込みと距離計算
 # ------------------------------
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
-df = df.dropna(subset=['latitude', 'longitude'])  # 欠損除外
+df = df.dropna(subset=['latitude', 'longitude'])
 
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
-filtered_df = df[df['距離km'] <= 5.0].sort_values(by='坪単価（万円）', ascending=False)  # ← 一時的に5.0kmに拡大
+filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
 
-# 異常値除外（ヒット数が多い場合のみ）
-if len(filtered_df) > 4:
+if len(filtered_df) > 2:
     filtered_df = filtered_df.iloc[1:-1]
 
 # ------------------------------
