@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（現在地取得をボタン制御に変更）
+# ✅ モバイル向け app_mobile.py（現在地取得をボタン制御に変更＋物件抽出修正）
 import streamlit as st
 import pandas as pd
 import requests
@@ -83,11 +83,13 @@ if center_lat is None or center_lon is None:
 # データ読み込みと距離計算
 # ------------------------------
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
-df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
-filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
+df = df.dropna(subset=['latitude', 'longitude'])  # 欠損除外
 
-# 異常値除外
-if len(filtered_df) > 2:
+df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
+filtered_df = df[df['距離km'] <= 5.0].sort_values(by='坪単価（万円）', ascending=False)  # ← 一時的に5.0kmに拡大
+
+# 異常値除外（ヒット数が多い場合のみ）
+if len(filtered_df) > 4:
     filtered_df = filtered_df.iloc[1:-1]
 
 # ------------------------------
