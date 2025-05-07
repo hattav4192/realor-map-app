@@ -1,6 +1,4 @@
-# ✅ PC向け app.py（高機能版 - 現在地取得・地図自動調整・用途地域表示・テーブル行クリック）
-# 🔧 モバイル向けバージョンは app_mobile.py として別途提供します（軽量・自動縮小）
-
+# ✅ PC向け app.py（絵文字削除・現在地ボタン対応・ピン強調・地図調整）
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,7 +8,7 @@ from math import radians, sin, cos, sqrt, atan2
 from st_aggrid import AgGrid, GridOptionsBuilder
 import streamlit.components.v1 as components
 
-GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
+GOOGLE_API_KEY = "YOUR_API_KEY_HERE"
 
 def geocode_address(address, api_key):
     url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
@@ -39,10 +37,10 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 st.set_page_config(page_title="売土地検索", layout="wide")
-st.title("\U0001F3E0 売土地検索（PC版）")
+st.title("売土地検索（PC版）")
 
-# JavaScriptで現在地を取得するボタン
-coords = components.html(
+# JavaScriptで現在地取得ボタンを表示
+components.html(
     """
     <script>
     function sendCoords() {
@@ -51,16 +49,18 @@ coords = components.html(
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
                 const coords = lat + "," + lon;
-                window.parent.postMessage(coords, "*");
+                const input = window.parent.document.querySelector("iframe").contentWindow.document.querySelector("input#coords");
+                if (input) input.value = coords;
             });
     }
     </script>
-    <button onclick="sendCoords()">\uD83D\uDCCD 現在地を取得</button>
+    <button onclick="sendCoords()">現在地を取得</button>
+    <input type="hidden" id="coords" value="" />
     """,
-    height=35
+    height=40
 )
 
-coord_input = st.text_input("\uD83C\uDF10 緯度,経度（現在地が入ります）", key="coords")
+coord_input = st.text_input("緯度,経度（現在地）", key="coords")
 address_query = ""
 
 if coord_input and "," in coord_input:
@@ -84,7 +84,7 @@ df['用途地域'] = df['用途地域'].fillna('-').astype(str)
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
 filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
 
-st.subheader("\U0001F5FA 検索結果とマップ")
+st.subheader("検索結果とマップ")
 
 if not filtered_df.empty:
     gb = GridOptionsBuilder.from_dataframe(filtered_df[['住所', '用途地域', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日']])
@@ -94,9 +94,9 @@ if not filtered_df.empty:
     selected_row = grid_response['selected_rows']
     selected_address = selected_row[0]['住所'] if selected_row else None
 
-    # 地図生成と自動ズーム調整
     m = folium.Map()
     bounds = []
+
     for _, row in filtered_df.iterrows():
         color = "red" if row['住所'] == selected_address else "blue"
         popup_html = f"""
@@ -120,6 +120,8 @@ if not filtered_df.empty:
 
     if bounds:
         m.fit_bounds(bounds)
+
     st_folium(m, width=1000, height=600)
 else:
     st.warning("該当物件がありませんでした。")
+
