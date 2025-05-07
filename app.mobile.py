@@ -8,7 +8,7 @@ from math import radians, sin, cos, sqrt, atan2
 import streamlit.components.v1 as components
 from st_aggrid import AgGrid, GridOptionsBuilder
 
-GOOGLE_API_KEY = "YOUR_API_KEY_HERE"
+GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
 # ------------------------------
 # ジオコーディング系
