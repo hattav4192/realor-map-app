@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（ボタン拡大＋全体装飾CSS追加）
+# ✅ モバイル向け app_mobile.py（PC版に適用可能な選択安全処理）
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,26 +10,27 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 
 GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
-# ------------------------------
-# ジオコーディング系
-# ------------------------------
 def geocode_address(address, api_key):
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
-    response = requests.get(url)
-    if response.status_code == 200:
+    try:
+        url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
+        response = requests.get(url)
         data = response.json()
         if data['status'] == 'OK':
             location = data['results'][0]['geometry']['location']
             return location['lat'], location['lng']
+    except:
+        pass
     return None, None
 
 def reverse_geocode(lat, lon, api_key):
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lon}&key={api_key}"
-    response = requests.get(url)
-    if response.status_code == 200:
+    try:
+        url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lon}&key={api_key}"
+        response = requests.get(url)
         data = response.json()
         if data['status'] == 'OK':
             return data['results'][0]['formatted_address']
+    except:
+        pass
     return ""
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -39,9 +40,6 @@ def haversine(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
-# ------------------------------
-# ページ初期設定とCSS
-# ------------------------------
 st.set_page_config(page_title="売土地検索モバイル", layout="wide")
 
 st.markdown("""
@@ -58,9 +56,6 @@ button {
 
 st.title("📱 売土地検索（スマホ版）")
 
-# ------------------------------
-# 現在地取得ボタン
-# ------------------------------
 components.html("""
 <script>
 function sendCoords() {
@@ -89,12 +84,8 @@ function sendCoords() {
 <input type="hidden" id="coords" value="" />
 """, height=60)
 
-# ------------------------------
-# 検索欄（住所）と逆ジオ
-# ------------------------------
 coords = st.text_input("緯度,経度（現在地）", key="coords")
 address_query = ""
-
 if coords and "," in coords:
     lat, lon = map(float, coords.split(","))
     address_query = reverse_geocode(lat, lon, GOOGLE_API_KEY)
@@ -108,9 +99,6 @@ if center_lat is None or center_lon is None:
     st.error("住所が見つかりませんでした。")
     st.stop()
 
-# ------------------------------
-# データ読み込み・フィルタ
-# ------------------------------
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
 df['用途地域'] = df['用途地域'].fillna('-').astype(str)
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
@@ -118,14 +106,12 @@ filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', 
 
 st.subheader("検索結果とマップ")
 
-# ------------------------------
-# テーブル＋地図（選択強調）
-# ------------------------------
 if not filtered_df.empty:
     gb = GridOptionsBuilder.from_dataframe(filtered_df[['住所', '用途地域', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日']])
     gb.configure_selection("single", use_checkbox=False)
     grid = AgGrid(filtered_df, gridOptions=gb.build(), height=300, theme="streamlit")
-    selected_address = grid['selected_rows'][0]['住所'] if grid['selected_rows'] else None
+    selected_rows = grid['selected_rows']
+    selected_address = selected_rows[0]['住所'] if isinstance(selected_rows, list) and len(selected_rows) > 0 else None
 
     m = folium.Map(zoom_control=False, dragging=False)
     bounds = []
