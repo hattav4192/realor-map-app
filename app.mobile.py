@@ -90,7 +90,7 @@ if len(filtered_df) > 2:
 # 結果表示
 # ------------------------------
 st.subheader("📋 該当物件一覧")
-display_columns = ['住所', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日']
+display_columns = ['住所', '登録価格（万円）', '用途地域', '坪単価（万円）', '土地面積（坪）', '公開日']
 display_columns = [col for col in display_columns if col in filtered_df.columns]
 st.dataframe(filtered_df[display_columns])
 
@@ -111,6 +111,7 @@ if not filtered_df.empty:
   <strong>{row['住所']}</strong><br>
   <ul style='padding-left: 15px; margin: 0;'>
     <li>価格：{row['登録価格（万円）']} 万円</li>
+    <li>用途地域：{row['用途地域']}</li>
     <li>坪単価：{row['坪単価（万円）']} 万円</li>
     <li>土地面積：{row['土地面積（坪）']} 坪</li>
     <li>公開日：{row['公開日']}</li>
