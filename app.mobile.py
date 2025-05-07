@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（PC版に適用可能な選択安全処理＋ピン色強調修正）
+# ✅ モバイル向け app_mobile.py（現在地取得安定化版）
 import streamlit as st
 import pandas as pd
 import requests
@@ -41,50 +41,30 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 st.set_page_config(page_title="売土地検索モバイル", layout="wide")
-
-st.markdown("""
-<style>
-body {
-    background-color: #f9f9f9;
-    font-family: 'Segoe UI', sans-serif;
-}
-button {
-    font-size: 16px;
-}
-</style>
-""", unsafe_allow_html=True)
-
 st.title("📱 売土地検索（スマホ版）")
 
-components.html("""
+# 位置取得スクリプトと隠しフォーム（streamlit内部に書き込み）
+st.markdown("""
 <script>
 function sendCoords() {
     navigator.geolocation.getCurrentPosition(
         function(pos) {
             const coords = pos.coords.latitude + "," + pos.coords.longitude;
-            const input = window.parent.document.querySelector("iframe").contentWindow.document.querySelector("input#coords");
-            if (input) input.value = coords;
+            const streamlitInput = window.parent.document.querySelectorAll('input[data-baseweb="input"]')[0];
+            if (streamlitInput) {
+                streamlitInput.value = coords;
+                streamlitInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        },
+        function(err) {
+            alert("位置情報を取得できませんでした。ブラウザの設定をご確認ください。");
         });
 }
 </script>
-<div style="text-align: center;">
-<button onclick="sendCoords()" style="
-    padding: 12px 24px;
-    font-size: 16px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    margin: 10px auto;
-">
-現在地を取得
-</button>
-</div>
-<input type="hidden" id="coords" value="" />
-""", height=60)
+<button onclick="sendCoords()" style="padding:12px 24px; font-size:16px; background-color:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; margin:10px auto; display:block;">📍 現在地を取得</button>
+""", unsafe_allow_html=True)
 
-coords = st.text_input("緯度,経度（現在地）", key="coords")
+coords = st.text_input("緯度,経度（現在地）")
 address_query = ""
 if coords and "," in coords:
     lat, lon = map(float, coords.split(","))
