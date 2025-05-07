@@ -8,7 +8,7 @@ from math import radians, sin, cos, sqrt, atan2
 from st_aggrid import AgGrid, GridOptionsBuilder
 import streamlit.components.v1 as components
 
-GOOGLE_API_KEY = "YOUR_API_KEY_HERE"
+GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
 def geocode_address(address, api_key):
     url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
