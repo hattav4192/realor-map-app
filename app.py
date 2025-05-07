@@ -1,33 +1,36 @@
+# ✅ PC向け app.py（高機能版 - 現在地取得・地図自動調整・用途地域表示・テーブル行クリック）
+# 🔧 モバイル向けバージョンは app_mobile.py として別途提供します（軽量・自動縮小）
+
 import streamlit as st
 import pandas as pd
 import requests
 import folium
 from streamlit_folium import st_folium
 from math import radians, sin, cos, sqrt, atan2
+from st_aggrid import AgGrid, GridOptionsBuilder
+import streamlit.components.v1 as components
 
-# ------------------------------
-# Google Maps APIキー
-# ------------------------------
-GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"  # ← あなたのAPIキーに差し替えてください
+GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
-# ------------------------------
-# Googleジオコーディング
-# ------------------------------
 def geocode_address(address, api_key):
-    try:
-        url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
-        response = requests.get(url)
+    url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
+    response = requests.get(url)
+    if response.status_code == 200:
         data = response.json()
         if data['status'] == 'OK':
             location = data['results'][0]['geometry']['location']
             return location['lat'], location['lng']
-    except:
-        pass
     return None, None
 
-# ------------------------------
-# 距離計算
-# ------------------------------
+def reverse_geocode(lat, lon, api_key):
+    url = f"https://maps.googleapis.com/maps/api/geocode/json?latlng={lat},{lon}&key={api_key}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        if data['status'] == 'OK':
+            return data['results'][0]['formatted_address']
+    return ""
+
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dlat = radians(lat2 - lat1)
@@ -35,97 +38,88 @@ def haversine(lat1, lon1, lat2, lon2):
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
-# ------------------------------
-# データ読み込み
-# ------------------------------
-df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
+st.set_page_config(page_title="売土地検索", layout="wide")
+st.title("\U0001F3E0 売土地検索（PC版）")
 
-# ------------------------------
-# UI：住所入力
-# ------------------------------
-st.title("売土地データ検索ツール")
-address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
+# JavaScriptで現在地を取得するボタン
+coords = components.html(
+    """
+    <script>
+    function sendCoords() {
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                const coords = lat + "," + lon;
+                window.parent.postMessage(coords, "*");
+            });
+    }
+    </script>
+    <button onclick="sendCoords()">\uD83D\uDCCD 現在地を取得</button>
+    """,
+    height=35
+)
 
-if address_query:
-    center_lat, center_lon = geocode_address(address_query, GOOGLE_API_KEY)
-    if center_lat is None or center_lon is None:
-        st.warning("📍 Googleで該当住所が見つかりませんでした。")
-        st.stop()
-    else:
-        st.success(f"中心座標：{center_lat:.6f}, {center_lon:.6f}")
+coord_input = st.text_input("\uD83C\uDF10 緯度,経度（現在地が入ります）", key="coords")
+address_query = ""
+
+if coord_input and "," in coord_input:
+    lat, lon = map(float, coord_input.split(","))
+    auto_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
+    address_query = st.text_input("検索中心住所（取得済）", value=auto_address)
 else:
-    st.info("検索する住所を入力してください。")
+    address_query = st.text_input("検索中心住所（例：浜松市中区）")
+
+if not address_query:
     st.stop()
 
-# ------------------------------
-# サイドバー：検索条件
-# ------------------------------
-with st.sidebar:
-    st.header("🔧 検索条件")
+center_lat, center_lon = geocode_address(address_query, GOOGLE_API_KEY)
+if center_lat is None or center_lon is None:
+    st.error("住所が見つかりませんでした。")
+    st.stop()
 
-    max_distance = st.slider("📍 距離（km）", 0.0, 10.0, 2.0, 0.1)
-
-    tsubo_min, tsubo_max = float(df['坪単価（万円）'].min()), float(df['坪単価（万円）'].max())
-    tsubo_range = st.slider("🎚 坪単価（万円）", tsubo_min, tsubo_max, (tsubo_min, tsubo_max))
-
-    area_min, area_max = float(df['土地面積（坪）'].min()), float(df['土地面積（坪）'].max())
-    area_range = st.slider("🎚 土地面積（坪）", area_min, area_max, (area_min, area_max))
-
-# ------------------------------
-# 距離計算とフィルタ処理
-# ------------------------------
+# データ読み込み・前処理
+df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
+df['用途地域'] = df['用途地域'].fillna('-').astype(str)
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
+filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
 
-filtered_df = df[
-    (df['距離km'] <= max_distance) &
-    (df['坪単価（万円）'] >= tsubo_range[0]) & (df['坪単価（万円）'] <= tsubo_range[1]) &
-    (df['土地面積（坪）'] >= area_range[0]) & (df['土地面積（坪）'] <= area_range[1])
-]
+st.subheader("\U0001F5FA 検索結果とマップ")
 
-filtered_df = filtered_df.sort_values(by='坪単価（万円）', ascending=False)
-
-# ------------------------------
-# 表示列とCSV
-# ------------------------------
-display_columns = [
-    '住所', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日'
-]
-display_columns = [col for col in display_columns if col in filtered_df.columns]
-
-st.subheader(f"🔎 抽出結果：{len(filtered_df)} 件")
-st.dataframe(filtered_df[display_columns])
-
-csv = filtered_df[display_columns].to_csv(index=False, encoding='utf-8-sig')
-st.download_button("📥 結果をCSVでダウンロード", data=csv, file_name='filtered_data.csv', mime='text/csv')
-
-# ------------------------------
-# folium 地図表示
-# ------------------------------
 if not filtered_df.empty:
-    st.subheader("🗺️ 該当物件の地図表示")
+    gb = GridOptionsBuilder.from_dataframe(filtered_df[['住所', '用途地域', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日']])
+    gb.configure_selection('single')
+    grid_response = AgGrid(filtered_df, gridOptions=gb.build(), height=300, width='100%')
 
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
+    selected_row = grid_response['selected_rows']
+    selected_address = selected_row[0]['住所'] if selected_row else None
 
+    # 地図生成と自動ズーム調整
+    m = folium.Map()
+    bounds = []
     for _, row in filtered_df.iterrows():
+        color = "red" if row['住所'] == selected_address else "blue"
         popup_html = f"""
-        <div style="width: 250px;">
-          <strong>{row['住所']}</strong><br>
-          <ul style='padding-left: 15px; margin: 0;'>
-            <li>価格：{row['登録価格（万円）']} 万円</li>
-            <li>坪単価：{row['坪単価（万円）']} 万円</li>
-            <li>土地面積：{row['土地面積（坪）']} 坪</li>
-            <li>公開日：{row['公開日']}</li>
-          </ul>
+        <div style='width: 250px;'>
+            <strong>{row['住所']}</strong><br>
+            <ul style='padding-left: 15px; margin: 0;'>
+                <li>用途地域：{row['用途地域']}</li>
+                <li>価格：{row['登録価格（万円）']} 万円</li>
+                <li>坪単価：{row['坪単価（万円）']} 万円</li>
+                <li>面積：{row['土地面積（坪）']} 坪</li>
+                <li>公開日：{row['公開日']}</li>
+            </ul>
         </div>
         """
-
         folium.Marker(
             location=[row['latitude'], row['longitude']],
             popup=folium.Popup(popup_html, max_width=300),
-            tooltip=row['住所'],
-            icon=folium.Icon(color="blue", icon="info-sign")
+            icon=folium.Icon(color=color, icon="info-sign")
         ).add_to(m)
+        bounds.append([row['latitude'], row['longitude']])
 
-    st_folium(m, width=700, height=500)
+    if bounds:
+        m.fit_bounds(bounds)
+    st_folium(m, width=1000, height=600)
 else:
-    st.info("該当する物件がありませんでした。")
+    st.warning("該当物件がありませんでした。")
