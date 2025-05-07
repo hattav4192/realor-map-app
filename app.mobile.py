@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（復元）
+# ✅ モバイル向け app_mobile.py（住所入力を補正・安定化版）
 import streamlit as st
 import pandas as pd
 import requests
@@ -9,21 +9,24 @@ from math import radians, sin, cos, sqrt, atan2
 # ------------------------------
 # Google Maps APIキー
 # ------------------------------
-GOOGLE_API_KEY = "YOUR_API_KEY_HERE"
+GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
 # ------------------------------
 # Googleジオコーディング
 # ------------------------------
 def geocode_address(address, api_key):
     try:
+        address = address.strip().replace('　', '').replace(' ', '')  # 全角・半角スペース除去
         url = f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={api_key}"
         response = requests.get(url)
         data = response.json()
         if data['status'] == 'OK':
             location = data['results'][0]['geometry']['location']
             return location['lat'], location['lng']
-    except:
-        pass
+        else:
+            st.error(f"住所が見つかりません（APIステータス: {data['status']}）")
+    except Exception as e:
+        st.error(f"ジオコーディング中にエラーが発生しました: {e}")
     return None, None
 
 # ------------------------------
@@ -50,7 +53,6 @@ address_query = st.text_input("🔍 中心としたい住所を入力（例：�
 if address_query:
     center_lat, center_lon = geocode_address(address_query, GOOGLE_API_KEY)
     if center_lat is None or center_lon is None:
-        st.warning("📍 Googleで該当住所が見つかりませんでした。")
         st.stop()
     else:
         st.success(f"中心座標：{center_lat:.6f}, {center_lon:.6f}")
