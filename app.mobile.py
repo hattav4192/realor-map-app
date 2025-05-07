@@ -1,4 +1,4 @@
-# ✅ モバイル向け app_mobile.py（現在地取得安定化版）
+# ✅ モバイル向け app_mobile.py（ログ付き現在地取得＆安定版）
 import streamlit as st
 import pandas as pd
 import requests
@@ -36,34 +36,44 @@ def reverse_geocode(lat, lon, api_key):
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
+    dlon = radians(lat2 - lon1)
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 st.set_page_config(page_title="売土地検索モバイル", layout="wide")
 st.title("📱 売土地検索（スマホ版）")
 
-# 位置取得スクリプトと隠しフォーム（streamlit内部に書き込み）
+# ------------------------------
+# 現在地取得ボタン（ログ付き）
+# ------------------------------
 st.markdown("""
 <script>
 function sendCoords() {
+    console.log("📍 位置情報取得開始...");
     navigator.geolocation.getCurrentPosition(
         function(pos) {
             const coords = pos.coords.latitude + "," + pos.coords.longitude;
-            const streamlitInput = window.parent.document.querySelectorAll('input[data-baseweb="input"]')[0];
-            if (streamlitInput) {
-                streamlitInput.value = coords;
-                streamlitInput.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log("✅ 現在地取得成功:", coords);
+            const input = window.parent.document.querySelectorAll('input[data-baseweb="input"]')[0];
+            if (input) {
+                input.value = coords;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                console.log("❗ 入力欄が見つかりませんでした");
             }
         },
         function(err) {
-            alert("位置情報を取得できませんでした。ブラウザの設定をご確認ください。");
+            console.log("❌ 位置情報取得失敗:", err);
+            alert("位置情報が取得できません。ブラウザの位置情報設定を確認してください。");
         });
 }
 </script>
 <button onclick="sendCoords()" style="padding:12px 24px; font-size:16px; background-color:#007bff; color:white; border:none; border-radius:6px; cursor:pointer; margin:10px auto; display:block;">📍 現在地を取得</button>
 """, unsafe_allow_html=True)
 
+# ------------------------------
+# 入力フォームとジオコーディング
+# ------------------------------
 coords = st.text_input("緯度,経度（現在地）")
 address_query = ""
 if coords and "," in coords:
@@ -79,6 +89,9 @@ if center_lat is None or center_lon is None:
     st.error("住所が見つかりませんでした。")
     st.stop()
 
+# ------------------------------
+# データ読み込みとフィルタ
+# ------------------------------
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
 df['用途地域'] = df['用途地域'].fillna('-').astype(str)
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
