@@ -1,11 +1,11 @@
-# ✅ モバイル向け app_mobile.py（高度な現在地取得機能対応）
+# ✅ モバイル向け app_mobile.py（get_geolocation 関数を使用）
 import streamlit as st
 import pandas as pd
 import requests
 import folium
 from streamlit_folium import st_folium
 from math import radians, sin, cos, sqrt, atan2
-from streamlit_js_eval import streamlit_js_eval
+from streamlit_js_eval import get_geolocation
 
 GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
@@ -56,14 +56,13 @@ st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
 # ------------------------------
-# 現在地取得（streamlit-js-eval使用）
+# 現在地取得（get_geolocation 使用）
 # ------------------------------
-st.markdown("**📍 現在地から自動入力（位置情報を許可してください）**")
-coords = streamlit_js_eval(js_expressions="[navigator.geolocation.getCurrentPosition]", key="get_pos", want_output=True)
+location = get_geolocation()
 
-if coords and isinstance(coords, dict) and "coords" in coords:
-    lat = coords["coords"]["latitude"]
-    lon = coords["coords"]["longitude"]
+if location:
+    lat = location["latitude"]
+    lon = location["longitude"]
     reverse_address = reverse_geocode(lat, lon, GOOGLE_API_KEY)
     address_query = st.text_input("検索用の住所（現在地から取得済み）", value=reverse_address)
 else:
