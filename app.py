@@ -1,4 +1,3 @@
-# ✅ PC向け app.py（旧バージョンに復元）
 import streamlit as st
 import pandas as pd
 import requests
@@ -85,11 +84,15 @@ filtered_df = df[
 
 filtered_df = filtered_df.sort_values(by='坪単価（万円）', ascending=False)
 
+# 上下1件（異常値）を除外
+if len(filtered_df) > 2:
+    filtered_df = filtered_df.iloc[1:-1]
+
 # ------------------------------
 # 表示列とCSV
 # ------------------------------
 display_columns = [
-    '住所', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日'
+    '住所', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '用途地域', '公開日'
 ]
 display_columns = [col for col in display_columns if col in filtered_df.columns]
 
@@ -110,20 +113,21 @@ if not filtered_df.empty:
 
     # ピン追加
     for _, row in filtered_df.iterrows():
+        popup_html = f"""
+        <div style="width: 250px;">
+          <strong>{row['住所']}</strong><br>
+          <ul style='padding-left: 15px; margin: 0;'>
+            <li>価格：{row['登録価格（万円）']} 万円</li>
+            <li>坪単価：{row['坪単価（万円）']} 万円</li>
+            <li>土地面積：{row['土地面積（坪）']} 坪</li>
+            <li>用途地域：{row['用途地域']}</li>
+            <li>公開日：{row['公開日']}</li>
+          </ul>
+        </div>
+        """
         folium.Marker(
             location=[row['latitude'], row['longitude']],
-            popup_html = f"""
-<div style="width: 250px;">
-  <strong>{row['住所']}</strong><br>
-  <ul style='padding-left: 15px; margin: 0;'>
-    <li>価格：{row['登録価格（万円）']} 万円</li>
-    <li>坪単価：{row['坪単価（万円）']} 万円</li>
-    <li>土地面積：{row['土地面積（坪）']} 坪</li>
-    <li>公開日：{row['公開日']}</li>
-  </ul>
-</div>
-""",
-            popup=folium.Popup(f"{row['住所']}", max_width=300),
+            popup=folium.Popup(popup_html, max_width=300),
             tooltip=row['住所'],
             icon=folium.Icon(color="blue", icon="info-sign")
         ).add_to(m)
