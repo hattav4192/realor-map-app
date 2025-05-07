@@ -63,7 +63,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("\U0001F3E0 売土地検索（スマホ）")
+st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
 # ------------------------------
@@ -81,7 +81,7 @@ components.html("""
             });
     }
     </script>
-    <button onclick="getLocation()">\uD83D\uDCCD 現在地から取得</button>
+    <button onclick="getLocation()">📍 現在地から取得</button>
     <input type="hidden" id="coords_input" value="" />
 """, height=60)
 st.markdown('</div>', unsafe_allow_html=True)
@@ -119,7 +119,7 @@ if len(filtered_df) > 2:
 # ------------------------------
 # 表示
 # ------------------------------
-st.subheader("\U0001F4CB 該当物件一覧")
+st.subheader("📋 該当物件一覧")
 display_columns = ['住所', '登録価格（万円）', '坪単価（万円）', '土地面積（坪）', '公開日']
 display_columns = [col for col in display_columns if col in filtered_df.columns]
 st.dataframe(filtered_df[display_columns])
@@ -128,7 +128,7 @@ st.dataframe(filtered_df[display_columns])
 # 地図表示
 # ------------------------------
 if not filtered_df.empty:
-    st.subheader("\U0001F5FA 地図で確認")
+    st.subheader("🗺️ 地図で確認")
     m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
 
     # 現在地マーカー
