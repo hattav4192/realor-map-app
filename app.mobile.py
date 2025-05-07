@@ -96,6 +96,10 @@ if center_lat is None or center_lon is None:
 df = pd.read_csv('住所付き_緯度経度付きデータ.csv', encoding='utf-8-sig')
 df['用途地域'] = df['用途地域'].fillna('-').astype(str)
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
+
+st.write("デバッグ：検索中心", center_lat, center_lon)
+st.dataframe(df[['住所', 'latitude', 'longitude', '距離km']].head(20))
+
 filtered_df = df[df['距離km'] <= 2.0].sort_values(by='坪単価（万円）', ascending=False)
 
 st.subheader("検索結果とマップ")
