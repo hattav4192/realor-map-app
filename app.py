@@ -58,29 +58,16 @@ else:
     st.stop()
 
 # ------------------------------
-# サイドバー：検索条件
+# UI：検索範囲スライダー（サイドバーから移動）
 # ------------------------------
-with st.sidebar:
-    st.header("🔧 検索条件")
-
-    max_distance = st.slider("📍 距離（km）", 0.0, 10.0, 2.0, 0.1)
-
-    tsubo_min, tsubo_max = float(df['坪単価（万円）'].min()), float(df['坪単価（万円）'].max())
-    tsubo_range = st.slider("🎚 坪単価（万円）", tsubo_min, tsubo_max, (tsubo_min, tsubo_max))
-
-    area_min, area_max = float(df['土地面積（坪）'].min()), float(df['土地面積（坪）'].max())
-    area_range = st.slider("🎚 土地面積（坪）", area_min, area_max, (area_min, area_max))
+max_distance = st.slider("📏 検索範囲（km）", 0.0, 10.0, 2.0, 0.1)
 
 # ------------------------------
 # 距離計算とフィルタ処理
 # ------------------------------
 df['距離km'] = df.apply(lambda row: haversine(center_lat, center_lon, row['latitude'], row['longitude']), axis=1)
 
-filtered_df = df[
-    (df['距離km'] <= max_distance) &
-    (df['坪単価（万円）'] >= tsubo_range[0]) & (df['坪単価（万円）'] <= tsubo_range[1]) &
-    (df['土地面積（坪）'] >= area_range[0]) & (df['土地面積（坪）'] <= area_range[1])
-]
+filtered_df = df[df['距離km'] <= max_distance]
 
 filtered_df = filtered_df.sort_values(by='坪単価（万円）', ascending=False)
 
@@ -108,10 +95,8 @@ st.download_button("📥 結果をCSVでダウンロード", data=csv, file_name
 if not filtered_df.empty:
     st.subheader("🗺️ 該当物件の地図表示")
 
-    # 地図を作成
     m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
 
-    # ピン追加
     for _, row in filtered_df.iterrows():
         popup_html = f"""
         <div style="width: 250px;">
@@ -132,7 +117,6 @@ if not filtered_df.empty:
             icon=folium.Icon(color="blue", icon="info-sign")
         ).add_to(m)
 
-    # 表示
     st_folium(m, width=700, height=500)
 else:
     st.info("該当する物件がありませんでした。")
