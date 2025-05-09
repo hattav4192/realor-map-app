@@ -74,7 +74,7 @@ if center_lat is None:
 # ------------------------------
 # データ読み込み・計算
 # ------------------------------
-csv_file = '住所付き_緯度経度付きデータ_1.csv'
+csv_file = '住所付き_緯度経度付きデータ.csv'
 df = pd.read_csv(csv_file, encoding='utf-8-sig')
 df = df.dropna(subset=['latitude', 'longitude'])
 df['距離km'] = df.apply(lambda r: haversine(center_lat, center_lon, r['latitude'], r['longitude']), axis=1)
