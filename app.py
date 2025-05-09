@@ -6,34 +6,26 @@ from streamlit_folium import st_folium
 from math import radians, sin, cos, sqrt, atan2
 
 # ------------------------------
-# Google Maps APIキー（Geocoding APIを有効化したもの）
+# Google Maps APIキー
+# ※ 必ず Geocoding API が有効化されたキーを使ってください
 # ------------------------------
 GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFS5_myBGJVi45Iyg"
 
-# ------------------------------
-# Googleジオコーディング（params 方式）
-# ------------------------------
 def geocode_address(address, api_key):
     try:
-        params = {"address": address, "key": api_key}
         resp = requests.get(
             "https://maps.googleapis.com/maps/api/geocode/json",
-            params=params,
+            params={"address": address, "key": api_key},
             timeout=5
         )
         data = resp.json()
-        status = data.get("status")
-        st.write("📥 Geocoding status:", status)
-        if status == "OK":
+        if data.get("status") == "OK":
             loc = data["results"][0]["geometry"]["location"]
             return loc["lat"], loc["lng"]
-    except Exception as e:
-        st.error(f"Geocoding error: {e}")
+    except Exception:
+        pass
     return None, None
 
-# ------------------------------
-# 距離計算（haversine）
-# ------------------------------
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     dlat = radians(lat2 - lat1)
@@ -45,15 +37,12 @@ def haversine(lat1, lon1, lat2, lon2):
 # データ読み込み
 # ------------------------------
 df = pd.read_csv("住所付き_緯度経度付きデータ.csv", encoding="utf-8-sig")
-df.columns = [c.strip() for c in df.columns]  # 列名の空白除去
-st.write("### CSV 列一覧:", df.columns.tolist())
-
-# 必要に応じて列名をリネーム
+df.columns = [c.strip() for c in df.columns]
 if "lat" in df.columns and "lng" in df.columns:
-    df = df.rename(columns={"lat":"latitude", "lng":"longitude"})
+    df = df.rename(columns={"lat": "latitude", "lng": "longitude"})
 
 # ------------------------------
-# Streamlit UI：住所入力
+# UI：住所入力
 # ------------------------------
 st.title("売土地データ検索ツール")
 address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
@@ -90,7 +79,7 @@ display_columns = [
     "住所",
     "登録価格（万円）",
     "坪単価（万円）",
-    "土地面積（坪）",   # CSV 中の坪単位列をそのまま使う
+    "土地面積（坪）",
     "用途地域",
     "取引態様",
     "登録会員",
@@ -106,7 +95,7 @@ csv_data = filtered_df[display_columns].to_csv(index=False, encoding="utf-8-sig"
 st.download_button("📥 結果をCSVでダウンロード", data=csv_data, file_name="filtered_data.csv")
 
 # ------------------------------
-# 地図表示：Folium＋Popup
+# 地図表示
 # ------------------------------
 if not filtered_df.empty:
     st.subheader("🗺️ 該当物件の地図表示")
