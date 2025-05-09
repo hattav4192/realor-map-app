@@ -12,11 +12,6 @@ from streamlit_js_eval import get_geolocation
 GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 st.set_page_config(page_title="売土地検索スマホ", layout="centered")
 
-# アプリ起動時にリブートして現在地を再取得
-if 'reboot' not in st.session_state:
-    st.session_state.reboot = True
-    st.experimental_rerun()
-
 st.title("🏠 売土地検索（スマホ）")
 st.markdown("現在地または住所を入力して、2km圏内の土地情報を表示します。")
 
@@ -58,7 +53,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 
 # ------------------------------
-# 入力フォーム
+# 入力フォームと現在地取得
 # ------------------------------
 location = get_geolocation()
 if location and location.get("coords"):
@@ -79,7 +74,6 @@ if center_lat is None:
 # ------------------------------
 # データ読み込み・計算
 # ------------------------------
-# 参照ファイルをPC版と揃える
 csv_file = '住所付き_緯度経度付きデータ_1.csv'
 df = pd.read_csv(csv_file, encoding='utf-8-sig')
 df = df.dropna(subset=['latitude', 'longitude'])
@@ -94,7 +88,6 @@ if len(filtered) > 2:
 # 結果表示
 # ------------------------------
 st.subheader("📋 該当物件一覧")
-# 表示項目順番を指定
 display_cols = [
     '住所', '登録価格（万円）', '坪単価（万円）', '土地面積（㎡）',
     '用途地域', '取引態様', '登録会員', 'TEL', '公開日'
