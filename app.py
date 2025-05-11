@@ -9,7 +9,7 @@ from math import radians, sin, cos, sqrt, atan2
 # Google Maps APIキー
 # ※ 必ず Geocoding API が有効化されたキーを使ってください
 # ------------------------------
-GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFS5_myBGJVi45Iyg"
+GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
 
 def geocode_address(address, api_key):
     try:
