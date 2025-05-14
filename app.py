@@ -6,6 +6,15 @@ from streamlit_folium import st_folium
 from math import radians, sin, cos, sqrt, atan2
 
 # ------------------------------
+# ページ設定
+# ------------------------------
+st.set_page_config(
+    page_title="売土地検索ツール",
+    page_icon="🏠",
+    layout="centered",
+)
+
+# ------------------------------
 # 設定
 # ------------------------------
 GOOGLE_API_KEY = "AIzaSyA-JMG_3AXD5SH8ENFSI5_myBGJVi45Iyg"
@@ -85,7 +94,7 @@ df = load_data(CSV_PATH)
 # ------------------------------
 # Streamlit UI
 # ------------------------------
-st.title("売土地データ検索ツール")
+st.title("🏠 売土地検索ツール")
 
 address_query = st.text_input("🔍 中心としたい住所を入力（例：浜松市中区）")
 if not address_query:
