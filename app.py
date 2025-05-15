@@ -107,13 +107,13 @@ if center_lat is None:
     st.stop()
 st.success(f"中心座標：{center_lat:.6f}, {center_lon:.6f}")
 
-max_distance = st.slider("📏 検索範囲（km）", 0.0, 10.0, 2.0, 0.1)
+max_distance = st.slider("📏 検索範囲（km）", 0.0, 50.0, 2.0, 0.1)
 
 min_area, max_area = st.slider(
     "📐 土地面積（坪）の範囲",
     0.0,
     float(df["土地面積（坪）"].max()),
-    (0.0, 100.0),
+    (0.0, 1000.0),
     1.0,
 )
 
