@@ -1,4 +1,4 @@
-# streamlit_app.py
+# app.py  ――― Streamlit 売土地検索ツール
 import os
 import urllib.parse
 from math import radians, sin, cos, sqrt, atan2
@@ -7,51 +7,35 @@ from pathlib import Path
 import pandas as pd
 import requests
 import streamlit as st
-from streamlit_folium import st_folium
 import folium
+from streamlit_folium import st_folium
 
 # ------------------------------------------------------------
-# 🔑 API キー取得
-#   優先順位: st.secrets > .env > OS環境変数
+# 🔑 API キー取得（.env のみを見る）
 # ------------------------------------------------------------
 try:
-    from dotenv import load_dotenv           # pip install python-dotenv
+    from dotenv import load_dotenv, find_dotenv          # pip install python-dotenv
 except ImportError:
-    load_dotenv = None                       # 未インストールでも動く
+    st.error("python-dotenv がありません。  pip install python-dotenv でインストールしてください。")
+    st.stop()
 
-def get_api_key() -> str:
-    # ① secrets.toml（[google] api_key="..."）
-    if "google" in st.secrets and "api_key" in st.secrets["google"]:
-        return st.secrets["google"]["api_key"]
+# `.env` を現在の作業フォルダ〜上位階層で検索して読み込む
+load_dotenv(find_dotenv(usecwd=True), override=False)
 
-    # ② .env
-    if load_dotenv:
-        load_dotenv(dotenv_path=Path(__file__).with_name(".env"), override=False)
-
-    # ③ 環境変数
-    key = os.getenv("GOOGLE_MAPS_API_KEY")
-    if not key:
-        st.error(
-            "環境変数 GOOGLE_MAPS_API_KEY が設定されていません。\n"
-            "  例）PowerShell:  $Env:GOOGLE_MAPS_API_KEY = \"YOUR_KEY\"\n"
-            "       bash/zsh  :  export GOOGLE_MAPS_API_KEY=\"YOUR_KEY\"\n"
-            "  または `.env` / `secrets.toml` にキーを保存してください。"
-        )
-        st.stop()
-    return key
-
-GOOGLE_API_KEY = get_api_key()
+GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+if not GOOGLE_API_KEY:
+    st.error(
+        ".env が見つからないか、GOOGLE_MAPS_API_KEY が設定されていません。\n"
+        "同じフォルダに .env を置き、次の 1 行を記載してください：\n\n"
+        'GOOGLE_MAPS_API_KEY="YOUR_API_KEY"'
+    )
+    st.stop()
 
 # ------------------------------------------------------------
 # ページ設定
 # ------------------------------------------------------------
-st.set_page_config(
-    page_title="売土地検索ツール",
-    page_icon="🏠",
-    layout="centered",
-)
-
-CSV_PATH = "住所付き_緯度経度付きデータ.csv"
+st.set_page_config(page_title="売土地検索ツール", page_icon="🏠", layout="centered")
+CSV_PATH = "住所付き_緯度経度付きデータ.csv"    # 既存ファイル名そのまま
 
 # ------------------------------------------------------------
 # 補助関数
@@ -81,9 +65,10 @@ def haversine(lat1, lon1, lat2, lon2):
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, encoding="utf-8-sig")
-    df.columns = df.columns.str.strip()                      # 列名トリム
+    df.columns = df.columns.str.strip()
     df = df.rename(columns={"lat": "latitude", "lng": "longitude"})
-    if not {"latitude", "longitude"} <= set(df.columns):
+
+    if not {"latitude", "longitude"}.issubset(df.columns):
         st.error("CSV に latitude / longitude 列がありません。")
         st.stop()
 
@@ -127,35 +112,35 @@ min_area, max_area = st.slider(
 )
 
 # ------------------------------------------------------------
-# 距離計算 & フィルタ
+# フィルタ処理
 # ------------------------------------------------------------
 df["距離km"] = df.apply(
     lambda r: haversine(center_lat, center_lon, r.latitude, r.longitude),
     axis=1,
 )
 
-filtered_df = df[
+filtered = df[
     (df["距離km"] <= max_distance) &
     (df["土地面積（坪）"].between(min_area, max_area))
 ].copy()
 
-filtered_df = filtered_df.sort_values("坪単価（万円）", ascending=False)
-if len(filtered_df) > 2:
-    filtered_df = filtered_df.iloc[1:-1]
+filtered = filtered.sort_values("坪単価（万円）", ascending=False)
+if len(filtered) > 2:
+    filtered = filtered.iloc[1:-1]
 
 # ------------------------------------------------------------
-# 表示 & ダウンロード
+# 結果表示
 # ------------------------------------------------------------
 show_cols = [
     "住所","登録価格（万円）","坪単価（万円）","土地面積（坪）",
     "用途地域","取引態様","登録会員","TEL","公開日"
 ]
-show_cols = [c for c in show_cols if c in filtered_df.columns]
+show_cols = [c for c in show_cols if c in filtered.columns]
 
-st.subheader(f"🔎 抽出結果：{len(filtered_df)} 件")
-st.dataframe(filtered_df[show_cols], use_container_width=True)
+st.subheader(f"🔎 抽出結果：{len(filtered)} 件")
+st.dataframe(filtered[show_cols], use_container_width=True)
 
-csv_data = filtered_df[show_cols].to_csv(index=False, encoding="utf-8-sig")
+csv_data = filtered[show_cols].to_csv(index=False, encoding="utf-8-sig")
 st.download_button(
     "📥 結果を CSV でダウンロード",
     data=csv_data,
@@ -166,7 +151,7 @@ st.download_button(
 # ------------------------------------------------------------
 # 地図表示
 # ------------------------------------------------------------
-if filtered_df.empty:
+if filtered.empty:
     st.info("該当する物件がありませんでした。")
     st.stop()
 
@@ -178,7 +163,7 @@ folium.Marker(
     icon=folium.Icon(color="red", icon="star"),
 ).add_to(m)
 
-for _, row in filtered_df.iterrows():
+for _, row in filtered.iterrows():
     popup_html = f"""
     <div style="width:250px;">
       <strong>{row.get('住所','-')}</strong><br>
