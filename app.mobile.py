@@ -1,4 +1,4 @@
-# app.mobile.py  ―― スマホ向け 売土地検索ツール (.env でキー管理)
+# app.mobile.py ― スマホ向け 売土地検索ツール (.env でキー管理・住所入力のみ)
 import os
 import urllib.parse
 from math import radians, sin, cos, sqrt, atan2
@@ -10,17 +10,11 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 
-# スマホで現在地を取得するために使用
-try:
-    from streamlit_js_eval import get_geolocation   # pip install streamlit-js-eval
-except ImportError:
-    get_geolocation = None
-
 # ------------------------------------------------------------
 # 🔑 API キー取得（.env のみを見る）
 # ------------------------------------------------------------
 try:
-    from dotenv import load_dotenv, find_dotenv     # pip install python-dotenv
+    from dotenv import load_dotenv, find_dotenv   # pip install python-dotenv
 except ImportError:
     st.error("python-dotenv がインストールされていません。  pip install python-dotenv")
     st.stop()
@@ -31,8 +25,9 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 if not GOOGLE_API_KEY:
     st.error(
         ".env が見つからないか、GOOGLE_MAPS_API_KEY が設定されていません。\n"
-        '同じフォルダに .env を作成し、次の 1 行を記載してください：\n\n'
-        'GOOGLE_MAPS_API_KEY="YOUR_API_KEY"'
+        '同じフォルダに .env を作成し、1 行だけ\n'
+        'GOOGLE_MAPS_API_KEY="YOUR_API_KEY"\n'
+        "と記載してください。"
     )
     st.stop()
 
@@ -41,15 +36,16 @@ if not GOOGLE_API_KEY:
 # ------------------------------------------------------------
 st.set_page_config(page_title="売土地検索（スマホ）", page_icon="🏠", layout="centered")
 st.title("🏠 売土地検索（スマホ）")
-st.caption("現在地または住所を中心に、半径 0.5〜5 km 内の土地情報を検索します。")
+st.caption("住所を入力して、半径 0.5〜5 km 内の土地情報を検索します。")
 
-CSV_PATH = "住所付き_緯度経度付きデータ.csv"   # 既存ファイル名そのまま
+CSV_PATH = "住所付き_緯度経度付きデータ.csv"   # 既定の CSV 名
 
 # ------------------------------------------------------------
 # ユーティリティ
 # ------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def geocode_address(address: str):
+    """住所 → (lat, lon)。失敗時は (None, None)。"""
     params = {"address": address, "key": GOOGLE_API_KEY, "language": "ja"}
     url = "https://maps.googleapis.com/maps/api/geocode/json?" + urllib.parse.urlencode(params, safe=":")
     try:
@@ -95,40 +91,23 @@ def load_data(path: str) -> pd.DataFrame:
 df = load_data(CSV_PATH)
 
 # ------------------------------------------------------------
-# 検索中心の入力 UI
+# 住所入力のみの UI
 # ------------------------------------------------------------
-st.subheader("1️⃣ 検索中心の指定")
+st.subheader("1️⃣ 検索中心の住所を入力")
+address_input = st.text_input("🔍 住所（例：浜松市中区）")
 
-col1, col2 = st.columns([3, 1])
-with col1:
-    addr_input = st.text_input("🔍 住所を入力（例：浜松市中区）")
-with col2:
-    use_geo = st.button("📍 現在地取得")
+if not address_input:
+    st.stop()
 
-center_lat = center_lon = None
-
-# 住所入力優先
-if addr_input:
-    center_lat, center_lon = geocode_address(addr_input.strip())
-
-# 住所なし → 現在地ボタン
-if center_lat is None and use_geo:
-    if get_geolocation is None:
-        st.warning("streamlit_js_eval がインストールされていません。  pip install streamlit-js-eval")
-    else:
-        loc = get_geolocation()
-        if loc and "coords" in loc:
-            center_lat = loc["coords"]["latitude"]
-            center_lon = loc["coords"]["longitude"]
-            st.success("現在地を取得しました")
-
+center_lat, center_lon = geocode_address(address_input.strip())
 if center_lat is None:
+    st.warning("📍 住所が見つかりませんでした。もう一度入力してください。")
     st.stop()
 
 st.success(f"検索中心：{center_lat:.6f}, {center_lon:.6f}")
 
 # ------------------------------------------------------------
-# 検索設定
+# 検索条件
 # ------------------------------------------------------------
 radius = st.slider("📏 検索半径 (km)", 0.5, 5.0, 2.0, 0.1)
 min_area, max_area = st.slider(
@@ -140,7 +119,7 @@ min_area, max_area = st.slider(
 )
 
 # ------------------------------------------------------------
-# フィルタ
+# フィルタ & 距離計算
 # ------------------------------------------------------------
 df["距離km"] = df.apply(
     lambda r: haversine(center_lat, center_lon, r.latitude, r.longitude),
