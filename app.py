@@ -35,7 +35,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 # ──────────────────────────────────────────────────────────────
 # 📄 データ読み込み
 # ----------------------------------------------------------------
-CSV_PATH = Path("data/merged.csv")  # 適宜パス変更
+CSV_PATH = Path("住所付き_緯度経度付きデータ_1.csv")  # ← ここを実ファイルに合わせる
+
 
 @st.cache_data(show_spinner="CSV を読み込み中 …")
 def load_data(path: Path) -> pd.DataFrame:
@@ -72,6 +73,10 @@ def main() -> None:
     st.title("🏡 売土地検索ツール")
 
     # データロード
+    if not CSV_PATH.exists():
+        st.error(f"{CSV_PATH} が見つかりません。パスをご確認ください。")
+        st.stop()
+
     df = load_data(CSV_PATH).copy()
 
     if df.empty:
