@@ -35,7 +35,7 @@ if not GOOGLE_API_KEY:
 # ページ設定
 # ------------------------------------------------------------
 st.set_page_config(page_title="売土地検索ツール", page_icon="🏠", layout="centered")
-CSV_PATH = "住所付き_緯度経度付きデータ.csv"    # 既存ファイル名そのまま
+CSV_PATH = "住所付き_緯度経度付きデータ_1.csv"    # 既存ファイル名そのまま
 
 # ------------------------------------------------------------
 # 補助関数
@@ -151,38 +151,33 @@ st.download_button(
 # ------------------------------------------------------------
 # 地図表示
 # ------------------------------------------------------------
-if filtered.empty:
-    st.info("該当する物件がありませんでした。")
-    st.stop()
-
 st.subheader("🗺️ 該当物件の地図表示")
 m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
+
+# 検索中心マーカー
 folium.Marker(
     [center_lat, center_lon],
     tooltip="検索中心",
     icon=folium.Icon(color="red", icon="star"),
 ).add_to(m)
 
+# 物件マーカー
 for _, row in filtered.iterrows():
     popup_html = f"""
-    <div style="width:250px;">
-      <strong>{row.get('住所','-')}</strong><br>
-      <ul style="padding-left:15px;margin:0;">
-        <li>価格：{row.get('登録価格（万円）','-')} 万円</li>
-        <li>坪単価：{row.get('坪単価（万円）','-')} 万円</li>
-        <li>土地面積：{row.get('土地面積（坪）','-')} 坪</li>
-        <li>用途地域：{row.get('用途地域','-')}</li>
-        <li>取引態様：{row.get('取引態様','-')}</li>
-        <li>登録会員：{row.get('登録会員','-')}</li>
-        <li>TEL：{row.get('TEL','-')}</li>
-        <li>公開日：{row.get('公開日','-')}</li>
-      </ul>
+    <div style="width:220px;">
+      <strong>{row.get('住所', '-')}</strong><br>
+      価格&nbsp;:&nbsp;{row.get('登録価格（万円）', '-')}&nbsp;万円<br>
+      坪数&nbsp;:&nbsp;{row.get('土地面積（坪）', '-')}&nbsp;坪<br>
+      登録会員&nbsp;:&nbsp;{row.get('登録会員', '-')}<br>
+      TEL&nbsp;:&nbsp;{row.get('TEL', '-')}
     </div>
     """
     folium.Marker(
         [row.latitude, row.longitude],
-        popup=folium.Popup(popup_html, max_width=300),
         tooltip=row.get("住所", ""),
+        popup=folium.Popup(popup_html, max_width=250),
+        icon=folium.Icon(color="blue", icon="info-sign"),
     ).add_to(m)
 
 st_folium(m, width=700, height=500)
+

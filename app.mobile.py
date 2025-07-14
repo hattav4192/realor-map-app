@@ -1,4 +1,3 @@
-# app.mobile.py ― スマホ向け 売土地検索ツール (.env でキー管理・住所入力のみ)
 import os
 import urllib.parse
 from math import radians, sin, cos, sqrt, atan2
@@ -38,7 +37,7 @@ st.set_page_config(page_title="売土地検索（スマホ）", page_icon="🏠"
 st.title("🏠 売土地検索（スマホ）")
 st.caption("住所を入力して、半径 0.5〜5 km 内の土地情報を検索します。")
 
-CSV_PATH = "住所付き_緯度経度付きデータ.csv"   # 既定の CSV 名
+CSV_PATH = "住所付き_緯度経度付きデータ_1.csv"   # 既定の CSV 名
 
 # ------------------------------------------------------------
 # ユーティリティ
@@ -149,28 +148,28 @@ st.dataframe(filtered[show_cols], hide_index=True)
 # ------------------------------------------------------------
 # 地図表示
 # ------------------------------------------------------------
-if filtered.empty:
-    st.info("該当する物件がありませんでした。")
-    st.stop()
-
 st.subheader("3️⃣ 地図で確認")
 m = folium.Map(location=[center_lat, center_lon], zoom_start=14)
+
+# 検索中心マーカー
 folium.Marker(
     [center_lat, center_lon],
     tooltip="検索中心",
     icon=folium.Icon(color="red", icon="star")
 ).add_to(m)
 
+# 物件マーカー
 for _, r in filtered.iterrows():
     popup_html = f"""
-<strong>{r['住所']}</strong><br>
-価格: {r['登録価格（万円）']} 万円<br>
-坪単価: {r['坪単価（万円）']} 万円<br>
-距離: {r['距離km']:.2f} km
-"""
+    <strong>{r['住所']}</strong><br>
+    登録価格: {r['登録価格（万円）']} 万円<br>
+    坪数: {r['土地面積（坪）']} 坪<br>
+    登録会員: {r.get('登録会員', '-') if '登録会員' in r else '-'}<br>
+    電話番号: {r.get('TEL', '-') if 'TEL' in r else '-'}
+    """
     folium.Marker(
         [r.latitude, r.longitude],
-        tooltip=r.住所,
+        tooltip=r['住所'],
         popup=folium.Popup(popup_html, max_width=250),
         icon=folium.Icon(color="blue", icon="info-sign")
     ).add_to(m)
