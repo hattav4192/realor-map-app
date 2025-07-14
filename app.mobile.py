@@ -142,7 +142,8 @@ cond = (_df["距離(km)"] <= radius_km) & (_df["土地面積（坪）"] >= min_t
 if max_t < MAX_TSUBO_UI:
     cond &= _df["土地面積（坪）"] <= max_t
 
-flt = _df[cond].copy().sort_values("坪単価（万円/坪）")
+# 変更後（降順ソート）
+flt = _df[cond].copy().sort_values("坪単価（万円/坪）", ascending=False)
 
 # ────────────────────────────────────────────────
 # 結果テーブル
