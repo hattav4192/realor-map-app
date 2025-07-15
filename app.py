@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-realor-map-app / Streamlit  ✨デスクトップ版 rev13
+realor-map-app / Streamlit  ✨デスクトップ版 rev14
 
 2025-07-16
 ──────────────────────────────────────────────
@@ -11,7 +11,8 @@ realor-map-app / Streamlit  ✨デスクトップ版 rev13
 ● 一覧に 登録会員 / TEL / 日付 を表示、ポップアップにも同情報
 ● 距離・面積スライダー / 坪単価降順 は維持
 ● 検索結果で土地面積 30 坪以下を常に除外
-● テーブル表示で「土地面積(坪)」と「坪単価(万円/坪)」の順序を修正
+● テーブル表示で「坪単価(万円/坪)」→「土地面積(坪)」の順に修正
+● ポップアップでも「坪単価」→「面積」の順で表示
 """
 
 from __future__ import annotations
@@ -64,7 +65,7 @@ def geocode(addr: str):
     return None, None
 
 def haversine(lat1, lon1, lat2, lon2):
-    """2 点間距離 (km)"""
+    """球面三角法で 2 点間距離 (km)"""
     R = 6371.0
     dlat, dlon = map(radians, (lat2 - lat1, lon2 - lon1))
     a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
@@ -134,14 +135,15 @@ def main():
 
     if {"土地面積(坪)","土地面積(㎡)"}.isdisjoint(df.columns):
         st.warning("土地面積列が自動判定できません。該当列と単位を指定してください。")
-        candidates = [c for c in df.columns if re.search(r"面積|㎡|坪", c)]
-        col_sel = st.selectbox("面積列を選択", candidates)
+        cands = [c for c in df.columns if re.search(r"面積|㎡|坪", c)]
+        sel = st.selectbox("面積列を選択", cands)
         unit = st.radio("その列の単位は？", ("㎡","坪"))
-        if st.button("確定") and col_sel:
-            df = df.rename(columns={col_sel: f"土地面積({unit})"})
+        if st.button("確定") and sel:
+            df = df.rename(columns={sel: f"土地面積({unit})"})
             st.rerun()
         st.stop()
 
+    # 数値変換 & 派生列
     df["価格(万円)"] = pd.to_numeric(df["価格(万円)"].astype(str).str.replace(",", ""), errors="coerce")
     if "土地面積(㎡)" not in df.columns:
         df["土地面積(㎡)"] = pd.to_numeric(df["土地面積(坪)"], errors="coerce") * 3.305785
@@ -150,6 +152,7 @@ def main():
     df["土地面積(坪)"] = df["土地面積(坪)"].round(2)
     df["坪単価(万円/坪)"] = (df["価格(万円)"] / df["土地面積(坪)"]).round(1)
 
+    # 住所入力
     st.subheader("① 検索中心の住所を入力")
     addr = st.text_input("例：浜松市中区高林1丁目")
     if not addr:
@@ -159,26 +162,30 @@ def main():
         st.error("住所が見つかりませんでした。")
         st.stop()
 
+    # 距離計算
     df["距離(km)"] = df.apply(lambda r: haversine(center_lat, center_lon, r.lat, r.lon), axis=1)
 
+    # サイドバー：検索条件
     with st.sidebar:
         st.header("検索条件")
         radius = st.slider("検索半径 (km)", 0.5, 5.0, 2.0, 0.1)
-        tsubo_min, tsubo_max = st.slider("土地面積 (坪) ※500=500坪以上", 0, 500, (0, 500), step=10)
+        tmin, tmax = st.slider("土地面積 (坪) ※500=500坪以上", 0, 500, (0, 500), step=10)
 
+    # 絞り込み：半径・範囲・常に30坪超のみ
     cond = (
         (df["距離(km)"] <= radius) &
-        (df["土地面積(坪)"] >= tsubo_min) &
+        (df["土地面積(坪)"] >= tmin) &
         (df["土地面積(坪)"] > 30)
     )
-    if tsubo_max < 500:
-        cond &= df["土地面積(坪)"] <= tsubo_max
+    if tmax < 500:
+        cond &= df["土地面積(坪)"] <= tmax
     df_flt = df[cond].copy().sort_values("坪単価(万円/坪)", ascending=False)
 
+    # 一覧表示
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
     table_cols = [
         c for c in
-        ["所在地","日付","距離(km)","価格(万円)","土地面積(坪)","坪単価(万円/坪)","登録会員","TEL"]
+        ["所在地","日付","距離(km)","価格(万円)","坪単価(万円/坪)","土地面積(坪)","登録会員","TEL"]
         if c in df_flt.columns
     ]
     st.dataframe(df_flt[table_cols], height=320)
@@ -187,6 +194,7 @@ def main():
         st.info("該当する物件がありません。条件を調整してください。")
         return
 
+    # 地図表示
     m = folium.Map(location=[center_lat, center_lon], zoom_start=14, control_scale=True)
     folium.Marker([center_lat, center_lon], tooltip="検索中心",
                   icon=folium.Icon(color="red", icon="star")).add_to(m)
@@ -201,14 +209,16 @@ def main():
             f"<b>{r['所在地']}</b><br>"
             + (f"日付：{r.get('日付')}<br>" if "日付" in r else "")
             + f"価格：{price_fmt} 万円<br>"
+            + f"坪単価：{r['坪単価(万円/坪)']:.1f} 万円/坪<br>"
             + f"面積：{r['土地面積(坪)']:.1f} 坪<br>"
-            + f"<span style='color:#d46b08;'>坪単価：{r['坪単価(万円/坪)']:.1f} 万円/坪</span><br>"
             + f"登録会員：{r.get('登録会員','-')}<br>"
             + f"TEL：{r.get('TEL','-')}"
         )
-        folium.Marker([r.lat, r.lon], popup=folium.Popup(popup_html, max_width=260),
-                      tooltip=r["所在地"], icon=folium.Icon(color="blue", icon="home", prefix="fa")
-                      ).add_to(m)
+        folium.Marker([r.lat, r.lon],
+                      popup=folium.Popup(popup_html, max_width=260),
+                      tooltip=r["所在地"],
+                      icon=folium.Icon(color="blue", icon="home", prefix="fa")
+        ).add_to(m)
 
     st.markdown("**③ 地図で確認**")
     st_folium(m, width="100%", height=600)
