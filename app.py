@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-realor-map-app / Streamlit  ✨デスクトップ版 rev10
+realor-map-app / Streamlit  ✨デスクトップ版 rev11
 
 2025-07-16
 ──────────────────────────────────────────────
@@ -10,7 +10,7 @@ realor-map-app / Streamlit  ✨デスクトップ版 rev10
 ● 面積列が見つからない場合は UI で手動指定 (㎡ / 坪)
 ● 一覧に 登録会員 / TEL / 日付 を表示、ポップアップにも同情報
 ● 距離・面積スライダー / 坪単価降順 は維持
-● 検索結果で土地面積 60 坪以下を常に除外（cond に追加）
+● 検索結果で土地面積 30 坪以下を常に除外
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ except ImportError:
     pass
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
-CSV_PATH = Path("住所付き_緯度経度付きデータ_1.csv")   # 必要ならパスを修正
+CSV_PATH = Path("住所付き_緯度経度付きデータ_1.csv")  # 必要ならパスを修正
 
 # ──────────────────────────────────────────────
 # 1. ユーティリティ関数
@@ -79,7 +79,6 @@ def load_csv(path: Path) -> pd.DataFrame:
             return df
         except UnicodeDecodeError:
             continue
-    # fallback to charset_normalizer
     import charset_normalizer
     enc = charset_normalizer.detect(path.read_bytes()).get("encoding", "utf-8")
     df = pd.read_csv(path, encoding=enc, errors="replace")
@@ -90,27 +89,27 @@ def load_csv(path: Path) -> pd.DataFrame:
 # 2. 列名マッピング辞書 + 標準化
 # ------------------------------------------------
 ALIAS: Dict[str, str] = {
-    **{k: "lon" for k in ["lon","longitude","lng","経度","Long","Ｌｏｎｇ","Ｌｏｎ"]},
-    **{k: "lat" for k in ["lat","latitude","緯度","Lat","Ｌａｔ","Ｌａｔｉｔｕｄｅ"]},
-    **{k: "所在地" for k in ["所在地","住所","所在地（住所）","Addr","Address"]},
-    **{k: "価格(万円)" for k in ["価格(万円)","価格","登録価格（万円）","登録価格(万円)","値段","金額(万円)"]},
-    **{k: "土地面積(㎡)" for k in ["土地面積(㎡)","土地面積㎡","面積（㎡）","面積㎡","土地面積_m2","土地 面積(㎡)","土地面積 ㎡"]},
-    **{k: "土地面積(坪)" for k in ["土地面積(坪)","土地面積（坪）","面積（坪）","土地 面積(坪)","土地面積 坪"]},
+    **{k: "lon" for k in ["lon","longitude","lng","経度"]},
+    **{k: "lat" for k in ["lat","latitude","緯度"]},
+    **{k: "所在地" for k in ["所在地","住所","Addr","Address"]},
+    **{k: "価格(万円)" for k in ["価格(万円)","価格","登録価格（万円）","金額(万円)"]},
+    **{k: "土地面積(㎡)" for k in ["土地面積(㎡)","面積（㎡）","面積㎡"]},
+    **{k: "土地面積(坪)" for k in ["土地面積(坪)","面積（坪）"]},
 }
-REQUIRED = {"価格(万円)","lat","lon","所在地"}   # 面積は後で補完
+REQUIRED = {"価格(万円)","lat","lon","所在地"}  # 面積は後で補完
 
 def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    # alias→標準列名
+    # エイリアス→標準列名
     df = df.rename(columns={c: ALIAS[c] for c in df.columns if c in ALIAS})
-    # 正規表現で面積列を検出
+    # 正規表現で面積列を検出・命名
     for col in df.columns:
         if re.search(r"(㎡|m2|m²)", col) and "土地面積(㎡)" not in df.columns:
             df = df.rename(columns={col: "土地面積(㎡)"})
         if re.search(r"(坪)", col) and "土地面積(坪)" not in df.columns:
             df = df.rename(columns={col: "土地面積(坪)"})
-    # 日付列を自動検出
+    # 日付列を自動検出して「日付」列にリネーム
     for col in df.columns:
-        if re.search(r"日付|掲載日", col):
+        if re.search(r"(日付|掲載日|公開日|更新日)", col):
             df = df.rename(columns={col: "日付"})
             break
     # 必須列が無ければ UI で選択
@@ -142,7 +141,7 @@ def main():
     # 面積列チェック & 手動指定
     if {"土地面積(坪)","土地面積(㎡)"}.isdisjoint(df.columns):
         st.warning("土地面積列が自動判定できません。該当列と単位を指定してください。")
-        candidates = [c for c in df.columns if re.search(r"面積|㎡|坪|m2|m²", c)]
+        candidates = [c for c in df.columns if re.search(r"面積|㎡|坪", c)]
         col_sel = st.selectbox("面積列を選択", candidates)
         unit = st.radio("その列の単位は？", ("㎡","坪"))
         if st.button("確定") and col_sel:
@@ -178,11 +177,11 @@ def main():
         radius = st.slider("検索半径 (km)", 0.5, 5.0, 2.0, 0.1)
         tsubo_min, tsubo_max = st.slider("土地面積 (坪) ※500=500坪以上", 0, 500, (0, 500), step=10)
 
-    # 絞り込み：半径・スライダー範囲・そして常に 60坪超のみ
+    # 絞り込み：半径・スライダー範囲・常に30坪超のみ
     cond = (
         (df["距離(km)"] <= radius) &
         (df["土地面積(坪)"] >= tsubo_min) &
-        (df["土地面積(坪)"] > 60)
+        (df["土地面積(坪)"] > 30)
     )
     if tsubo_max < 500:
         cond &= df["土地面積(坪)"] <= tsubo_max
@@ -190,7 +189,8 @@ def main():
 
     # 一覧表示
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
-    table_cols = [c for c in
+    table_cols = [
+        c for c in
         ["所在地","日付","距離(km)","価格(万円)","土地面積(坪)","坪単価(万円/坪)","登録会員","TEL"]
         if c in df_flt.columns
     ]
@@ -211,7 +211,7 @@ def main():
         raw = r["価格(万円)"]
         try:
             price_fmt = f"{float(raw):,}"
-        except:
+        except Exception:
             price_fmt = "-"
         popup_html = (
             f"<b>{r['所在地']}</b><br>"
