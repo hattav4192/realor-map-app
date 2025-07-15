@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """app_mobile.py – Streamlit 売土地検索ツール（モバイル版）
-2025-07-14 rev2
+2025-07-14 rev3
 
 - スマホ画面での連続操作を想定し、すべての検索スライダーを常時表示
 - 面積スライダーの上限値を固定 500 坪とし、「500=500坪以上」として扱う
 - ポップアップに 登録会員 / TEL を追加
+- 一覧表とポップアップに「日付」列を追加表示
 """
 
 from __future__ import annotations
@@ -85,7 +86,7 @@ def load_data(path: Path) -> pd.DataFrame:
     # 土地面積(坪)
     if "土地面積（坪）" not in df.columns:
         if "土地面積（㎡）" in df.columns:
-            df["土地面積（坪）"] = (df["土地面積（㎡）"] / 3.305785).round(2)
+            df["土地面積（坪）」"] = (df["土地面積（㎡）"] / 3.305785).round(2)
         else:
             st.error("CSV に土地面積列が見当たりません。")
             st.stop()
@@ -96,7 +97,15 @@ def load_data(path: Path) -> pd.DataFrame:
 
     price_col = "登録価格（万円）" if "登録価格（万円）" in df.columns else "価格(万円)"
     df["坪単価（万円/坪）"] = (df[price_col] / df["土地面積（坪）"]).round(1)
+
+    # 日付列があれば文字列化しておく
+    for col in ("日付", "掲載日"):
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
+            break
+
     return df
+
 
 # ────────────────────────────────────────────────
 # ページ設定
@@ -142,16 +151,19 @@ cond = (_df["距離(km)"] <= radius_km) & (_df["土地面積（坪）"] >= min_t
 if max_t < MAX_TSUBO_UI:
     cond &= _df["土地面積（坪）"] <= max_t
 
-# 変更後（降順ソート）
+# 変更後（坪単価降順）
 flt = _df[cond].copy().sort_values("坪単価（万円/坪）", ascending=False)
 
 # ────────────────────────────────────────────────
 # 結果テーブル
 # ------------------------------------------------
 st.markdown(f"**② 検索結果：{len(flt)} 件**")
+# 日付列がある場合は表示列に追加
 cols_order = [
-    "住所", "距離(km)", "登録価格（万円）", "坪単価（万円/坪）", "土地面積（坪）", "用途地域", "取引態様", "登録会員", "TEL"
+    "住所", "日付", "距離(km)", "登録価格（万円）", "坪単価（万円/坪）",
+    "土地面積（坪）", "用途地域", "取引態様", "登録会員", "TEL"
 ]
+# 実在する列だけを抽出
 cols = [c for c in cols_order if c in flt.columns]
 flt["距離(km)"] = flt["距離(km)"].round(2)
 st.dataframe(flt[cols], hide_index=True, height=300)
@@ -166,8 +178,10 @@ m = folium.Map(location=map_center, zoom_start=14, control_scale=True)
 folium.Marker(map_center, tooltip="検索中心", icon=folium.Icon(color="red", icon="star")).add_to(m)
 
 for _, r in flt.iterrows():
-    html = (
+    # ポップアップに日付を追加
+    popup_html = (
         f"<b>{r['住所']}</b><br>"
+        f"{'日付：' + r['日付'] + '<br>' if '日付' in r and r['日付'] else ''}"
         f"価格：{r.get('登録価格（万円）', r.get('価格(万円)', '-')):,} 万円<br>"
         f"面積：{r['土地面積（坪）']:.1f} 坪<br>"
         f"<span style='color:#d46b08;'>坪単価：{r['坪単価（万円/坪）']:.1f} 万円/坪</span><br>"
@@ -176,7 +190,7 @@ for _, r in flt.iterrows():
     )
     folium.Marker(
         [r.latitude, r.longitude],
-        popup=folium.Popup(html, max_width=260),
+        popup=folium.Popup(popup_html, max_width=260),
         tooltip=r["住所"],
         icon=folium.Icon(color="blue", icon="home", prefix="fa"),
     ).add_to(m)
