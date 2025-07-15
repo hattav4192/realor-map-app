@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-realor-map-app / Streamlit  ✨デスクトップ版 rev20
+realor-map-app / Streamlit  ✨デスクトップ版 rev21
 
 2025-07-16
 ──────────────────────────────────────────────
@@ -28,7 +28,7 @@ import folium
 from streamlit_folium import st_folium
 
 # ──────────────────────────────────────────────
-# APIキー読み込み
+# APIキー読み込み（.env）
 try:
     from dotenv import load_dotenv, find_dotenv
     load_dotenv(find_dotenv(usecwd=True), override=False)
@@ -36,7 +36,7 @@ except ImportError:
     pass
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
-CSV_PATH        = Path("住所付き_緯度経度付きデータ_1.csv")
+CSV_PATH       = Path("住所付き_緯度経度付きデータ_1.csv")
 
 # ──────────────────────────────────────────────
 def geocode(addr: str):
@@ -90,9 +90,9 @@ ALIAS: Dict[str, str] = {
 REQUIRED = {"価格(万円)", "lat", "lon", "所在地"}
 
 def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    # エイリアスによる列名変換
+    # エイリアス変換
     df = df.rename(columns={c: ALIAS[c] for c in df.columns if c in ALIAS})
-    # 正規表現で「日付」「㎡」「坪」列を検出
+    # 正規表現で日付／㎡／坪列を検出
     for col in df.columns:
         if re.search(r"(日付|掲載日|公開日|更新日)", col) and "日付" not in df.columns:
             df = df.rename(columns={col: "日付"})
@@ -100,7 +100,7 @@ def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
             df = df.rename(columns={col: "土地面積(㎡)"})
         if re.search(r"(坪)", col) and "土地面積(坪)" not in df.columns:
             df = df.rename(columns={col: "土地面積(坪)"})
-    # 必須列不足時はUIで選択
+    # 必須列が足りなければUIで選択
     for miss in (REQUIRED - set(df.columns)):
         sel = st.selectbox(f"列『{miss}』を選択してください", [c for c in df.columns if c not in REQUIRED], key=miss)
         if sel:
@@ -116,13 +116,13 @@ def main():
     st.set_page_config(page_title="売土地検索ツール", layout="wide")
     st.title("🏡 売土地検索ツール")
 
-    # CSV読み込み
+    # CSV 読み込み
     if not CSV_PATH.exists():
         st.error(f"{CSV_PATH} が見つかりません")
         return
     df = standardize_columns(load_csv(CSV_PATH))
 
-    # 数値変換＆派生列
+    # 数値変換 & 面積・坪単価計算
     df["価格(万円)"] = pd.to_numeric(df["価格(万円)"].astype(str).str.replace(",", ""), errors="coerce")
     if "土地面積(坪)" not in df.columns and "土地面積(㎡)" in df.columns:
         df["土地面積(坪)"] = (pd.to_numeric(df["土地面積(㎡)"], errors="coerce") / 3.305785).round(2)
@@ -131,7 +131,7 @@ def main():
     df["土地面積(坪)"]    = pd.to_numeric(df["土地面積(坪)"], errors="coerce").round(2)
     df["坪単価(万円/坪)"] = (df["価格(万円)"] / df["土地面積(坪)"]).round(1)
 
-    # 検索中心住所入力→距離計算
+    # 住所入力→距離計算
     st.subheader("① 検索中心の住所を入力")
     addr = st.text_input("例：浜松市中区高林1丁目")
     if not addr:
@@ -157,16 +157,23 @@ def main():
     if tmax < 500:
         cond &= df["土地面積(坪)"] <= tmax
 
-    # 坪単価降順でソート
+    # 坪単価降順ソート
     df_flt = df[cond].sort_values("坪単価(万円/坪)", ascending=False)
 
-    # 結果テーブル：価格→坪単価→土地面積
+    # 結果テーブル：価格 → 坪単価 → 土地面積
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
     cols_order = [
-        "所在地", "日付", "距離(km)", "価格(万円)", "坪単価(万円/坪)", "土地面積(坪)", "登録会員", "TEL"
+        "所在地",
+        "日付",
+        "距離(km)",
+        "価格(万円)",
+        "坪単価(万円/坪)",
+        "土地面積(坪)",
+        "登録会員",
+        "TEL",
     ]
     display_cols = [c for c in cols_order if c in df_flt.columns]
-    st.dataframe(df_flt[display_cols], height=320)
+    st.dataframe(df_flt[display_cols], height=300)
 
     # 地図表示
     if df_flt.empty:
