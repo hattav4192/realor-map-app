@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-realor-map-app / Streamlit  ✨デスクトップ版 rev11
+realor-map-app / Streamlit  ✨デスクトップ版 rev12
 
 2025-07-16
 ──────────────────────────────────────────────
@@ -11,6 +11,7 @@ realor-map-app / Streamlit  ✨デスクトップ版 rev11
 ● 一覧に 登録会員 / TEL / 日付 を表示、ポップアップにも同情報
 ● 距離・面積スライダー / 坪単価降順 は維持
 ● 検索結果で土地面積 30 坪以下を常に除外
+● テーブル表示で「坪単価」と「土地面積」の順序を入れ替え
 """
 
 from __future__ import annotations
@@ -191,7 +192,7 @@ def main():
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
     table_cols = [
         c for c in
-        ["所在地","日付","距離(km)","価格(万円)","土地面積(坪)","坪単価(万円/坪)","登録会員","TEL"]
+        ["所在地","日付","距離(km)","価格(万円)","坪単価(万円/坪)","土地面積(坪)","登録会員","TEL"]
         if c in df_flt.columns
     ]
     st.dataframe(df_flt[table_cols], height=320)
