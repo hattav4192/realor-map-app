@@ -145,13 +145,13 @@ def main():
     if tmax < 500:
         cond &= df["土地面積(坪)"] <= tmax
 
-    # 坪単価降順でソート
-    df_flt = df[cond].sort_values("土地面積(坪))", ascending=False)
-
     # 【根本修正】２列を物理的に入れ替える
     tmp = df_flt["坪単価(万円/坪)"].copy()
     df_flt["坪単価(万円/坪)"]   = df_flt["土地面積(坪)"]
     df_flt["土地面積(坪)"]     = tmp
+
+    # 坪単価降順でソート
+    df_flt = df[cond].sort_values("坪単価(万円/坪)", ascending=False)
 
     # テーブル表示：価格 → 坪単価 → 土地面積
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
