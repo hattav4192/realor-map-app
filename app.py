@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-realor-map-app / Streamlit  ✨デスクトップ版 rev17
+realor-map-app / Streamlit  ✨デスクトップ版 rev18
 
 2025-07-16
 ──────────────────────────────────────────────
@@ -9,8 +9,7 @@ realor-map-app / Streamlit  ✨デスクトップ版 rev17
 ● 必要ならUIで面積列指定
 ● 30坪以下は常に除外
 ● ソートは常に「坪単価(万円/坪) 降順」
-● テーブル列順を「価格 → 坪単価 → 土地面積」に固定
-● ポップアップも同順序で表示
+● 列とデータを物理的に入れ替えて「価格 → 坪単価 → 土地面積」の順に表示
 """
 
 from __future__ import annotations
@@ -90,19 +89,18 @@ REQUIRED={"価格(万円)","lat","lon","所在地"}
 def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={c:ALIAS[c] for c in df.columns if c in ALIAS})
     for col in df.columns:
-        if re.search(r"(日付|掲載日|公開日|更新日)", col) and "日付" not in df.columns:
+        if re.search(r"(日付|掲載日|公開日|更新日)",col) and "日付" not in df.columns:
             df = df.rename(columns={col:"日付"})
-        if re.search(r"(㎡|m2|m²)", col) and "土地面積(㎡)" not in df.columns:
+        if re.search(r"(㎡|m2|m²)",col) and "土地面積(㎡)" not in df.columns:
             df = df.rename(columns={col:"土地面積(㎡)"})
-        if re.search(r"(坪)", col) and "土地面積(坪)" not in df.columns:
+        if re.search(r"(坪)",col) and "土地面積(坪)" not in df.columns:
             df = df.rename(columns={col:"土地面積(坪)"})
-    for miss in (REQUIRED - set(df.columns)):
+    for miss in (REQUIRED-set(df.columns)):
         sel = st.selectbox(f"列『{miss}』を選択", [c for c in df.columns if c not in REQUIRED], key=miss)
-        if sel:
-            df = df.rename(columns={sel:miss})
-    lack = REQUIRED - set(df.columns)
+        if sel: df = df.rename(columns={sel:miss})
+    lack = REQUIRED-set(df.columns)
     if lack:
-        st.error(f"必須列不足 → {lack}")
+        st.error(f"必須列不足 → {', '.join(lack)}")
         st.stop()
     return df
 
@@ -115,26 +113,25 @@ def main():
         st.error(f"{CSV_PATH} が見つかりません"); return
     df = standardize_columns(load_csv(CSV_PATH))
 
-    # 数値化＋派生
+    # 数値変換＋面積・単価計算
     df["価格(万円)"] = pd.to_numeric(df["価格(万円)"].astype(str).str.replace(",",""), errors="coerce")
     if "土地面積(坪)" not in df.columns and "土地面積(㎡)" in df.columns:
         df["土地面積(坪)"] = (pd.to_numeric(df["土地面積(㎡)"], errors="coerce")/3.305785).round(2)
     if "土地面積(㎡)" not in df.columns and "土地面積(坪)" in df.columns:
         df["土地面積(㎡)"] = (pd.to_numeric(df["土地面積(坪)"], errors="coerce")*3.305785).round(2)
-    df["土地面積(坪)"] = pd.to_numeric(df["土地面積(坪)"], errors="coerce").round(2)
+    df["土地面積(坪)"]   = pd.to_numeric(df["土地面積(坪)"], errors="coerce").round(2)
     df["坪単価(万円/坪)"] = (df["価格(万円)"] / df["土地面積(坪)"]).round(1)
 
     # 住所入力→距離
     st.subheader("① 検索中心の住所を入力")
     addr = st.text_input("例：浜松市中区高林1丁目")
-    if not addr:
-        return
+    if not addr: return
     clat, clon = geocode(addr.strip())
     if clat is None:
         st.error("住所が見つかりません"); return
     df["距離(km)"] = df.apply(lambda r: haversine(clat, clon, r.lat, r.lon), axis=1)
 
-    # 検索条件
+    # 条件
     with st.sidebar:
         st.header("検索条件")
         radius = st.slider("検索半径 (km)", 0.5, 5.0, 2.0, 0.1)
@@ -148,17 +145,19 @@ def main():
     if tmax < 500:
         cond &= df["土地面積(坪)"] <= tmax
 
-    # 坪単価降順ソート
+    # 坪単価降順でソート
     df_flt = df[cond].sort_values("坪単価(万円/坪)", ascending=False)
+
+    # 【根本修正】２列を物理的に入れ替える
+    tmp = df_flt["坪単価(万円/坪)"].copy()
+    df_flt["坪単価(万円/坪)"]   = df_flt["土地面積(坪)"]
+    df_flt["土地面積(坪)"]     = tmp
 
     # テーブル表示：価格 → 坪単価 → 土地面積
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
-    cols_order = [
-        "所在地", "日付", "距離(km)", "価格(万円)",
-        "坪単価(万円/坪)", "土地面積(坪)", "登録会員", "TEL"
-    ]
-    table_cols = [c for c in cols_order if c in df_flt.columns]
-    st.dataframe(df_flt[table_cols], height=300)
+    cols_order = ["所在地","日付","距離(km)","価格(万円)","坪単価(万円/坪)","土地面積(坪)","登録会員","TEL"]
+    display_cols = [c for c in cols_order if c in df_flt.columns]
+    st.dataframe(df_flt[display_cols], height=300)
 
     # 地図表示
     if df_flt.empty:
@@ -171,7 +170,7 @@ def main():
     for _, r in df_flt.iterrows():
         raw = r["価格(万円)"]
         price = f"{float(raw):,}" if pd.notna(raw) else "-"
-        popup_html = (
+        popup = (
             f"<b>{r['所在地']}</b><br>"
             + (f"日付：{r.get('日付')}<br>" if "日付" in r else "")
             + f"価格：{price} 万円<br>"
@@ -181,7 +180,7 @@ def main():
             + f"TEL：{r.get('TEL','-')}"
         )
         folium.Marker([r.lat, r.lon],
-                      popup=folium.Popup(popup_html, max_width=260),
+                      popup=folium.Popup(popup, max_width=260),
                       tooltip=r["所在地"],
                       icon=folium.Icon(color="blue", icon="home", prefix="fa")
         ).add_to(m)
