@@ -11,14 +11,10 @@ realor-map-app / Streamlit  ✨デスクトップ版 rev15
 ● 一覧に 登録会員 / TEL / 日付 を表示、ポップアップにも同情報
 ● 距離・面積スライダー / 坪単価降順 は維持
 ● 検索結果で土地面積 30 坪以下を常に除外
-● テーブル表示で「土地面積(坪)」⇔「坪単価(万円/坪)」の列見出しを入れ替え
 """
 
 from __future__ import annotations
-
-import os
-import re
-import urllib.parse
+import os, re, urllib.parse
 from pathlib import Path
 from math import radians, sin, cos, sqrt, atan2
 from typing import Dict
@@ -30,8 +26,7 @@ import folium
 from streamlit_folium import st_folium
 
 # ──────────────────────────────────────────────
-# 🔑 Google Maps API Key（.env があれば読み込む）
-# ------------------------------------------------
+# APIキー読み込み
 try:
     from dotenv import load_dotenv, find_dotenv
     load_dotenv(find_dotenv(usecwd=True), override=False)
@@ -39,11 +34,10 @@ except ImportError:
     pass
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
-CSV_PATH = Path("住所付き_緯度経度付きデータ_1.csv")  # 必要ならパスを修正
+CSV_PATH        = Path("住所付き_緯度経度付きデータ_1.csv")
 
 # ──────────────────────────────────────────────
-# 1. ユーティリティ関数
-# ------------------------------------------------
+# ユーティリティ
 def geocode(addr: str):
     if not GOOGLE_API_KEY:
         return None, None
@@ -55,20 +49,20 @@ def geocode(addr: str):
     )
     try:
         js = requests.get(url, timeout=5).json()
-        if js.get("status") == "OK":
+        if js.get("status")=="OK":
             loc = js["results"][0]["geometry"]["location"]
             return loc["lat"], loc["lng"]
-    except Exception:
+    except:
         pass
     return None, None
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
-    dlat, dlon = map(radians, (lat2 - lat1, lon2 - lon1))
+    dlat, dlon = map(radians, (lat2-lat1, lon2-lon1))
     a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2
     return 2*R*atan2(sqrt(a), sqrt(1-a))
 
-@st.cache_data(show_spinner="CSV を読み込み中 …")
+@st.cache_data(show_spinner="CSVを読み込み中…")
 def load_csv(path: Path) -> pd.DataFrame:
     for enc in ("utf-8-sig","utf-8","cp932"):
         try:
@@ -84,9 +78,8 @@ def load_csv(path: Path) -> pd.DataFrame:
     return df
 
 # ──────────────────────────────────────────────
-# 2. 列名マッピング + 標準化
-# ------------------------------------------------
-ALIAS: Dict[str,str] = {
+# 列名マッピング＋自動判定
+ALIAS = {
     **{k:"lon" for k in ["lon","longitude","lng","経度"]},
     **{k:"lat" for k in ["lat","latitude","緯度"]},
     **{k:"所在地" for k in ["所在地","住所","Addr","Address"]},
@@ -97,121 +90,105 @@ ALIAS: Dict[str,str] = {
 REQUIRED = {"価格(万円)","lat","lon","所在地"}
 
 def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    # alias→正規列名
     df = df.rename(columns={c:ALIAS[c] for c in df.columns if c in ALIAS})
+    # 正規表現で「日付」「㎡」「坪」列も補完
     for col in df.columns:
-        if re.search(r"(㎡|m2|m²)",col) and "土地面積(㎡)" not in df.columns:
-            df = df.rename(columns={col:"土地面積(㎡)"})
-        if re.search(r"(坪)",col) and "土地面積(坪)" not in df.columns:
-            df = df.rename(columns={col:"土地面積(坪)"})
-    for col in df.columns:
-        if re.search(r"(日付|掲載日|公開日|更新日)",col):
+        if re.search(r"(日付|掲載日|公開日|更新日)", col) and "日付" not in df.columns:
             df = df.rename(columns={col:"日付"})
-            break
+        if re.search(r"(㎡|m2|m²)", col) and "土地面積(㎡)" not in df.columns:
+            df = df.rename(columns={col:"土地面積(㎡)"})
+        if re.search(r"(坪)", col) and "土地面積(坪)" not in df.columns:
+            df = df.rename(columns={col:"土地面積(坪)"})
+    # 必須列不足はUIで選択
     for miss in (REQUIRED-set(df.columns)):
-        sel = st.selectbox(f"列『{miss}』に該当するカラムを選択", [c for c in df.columns if c not in REQUIRED], key=miss)
-        if sel:
-            df = df.rename(columns={sel:miss})
+        sel = st.selectbox(f"列『{miss}』を選択", [c for c in df.columns if c not in REQUIRED], key=miss)
+        if sel: df = df.rename(columns={sel:miss})
     lack = REQUIRED-set(df.columns)
     if lack:
-        st.error(f"必須列が不足しています → {', '.join(lack)}")
+        st.error(f"必須列不足 → {lack}")
         st.stop()
     return df
 
 # ──────────────────────────────────────────────
-# 3. メインアプリ
-# ------------------------------------------------
+# メイン
 def main():
-    st.set_page_config(page_title="売土地検索ツール",layout="wide")
+    st.set_page_config(page_title="売土地検索ツール", layout="wide")
     st.title("🏡 売土地検索ツール")
 
     if not CSV_PATH.exists():
-        st.error(f"{CSV_PATH} が見つかりません。")
-        st.stop()
+        st.error(f"{CSV_PATH} が見つかりません。"); return
     df = standardize_columns(load_csv(CSV_PATH))
 
-    if {"土地面積(坪)","土地面積(㎡)"}.isdisjoint(df.columns):
-        st.warning("土地面積列が自動判定できません。")
-        cands = [c for c in df.columns if re.search(r"面積|㎡|坪",c)]
-        sel = st.selectbox("面積列を選択",cands)
-        unit=st.radio("その列の単位は？",("㎡","坪"))
-        if st.button("確定") and sel:
-            df = df.rename(columns={sel:f"土地面積({unit})"})
-            st.rerun()
-        st.stop()
+    # 数値化＋派生
+    df["価格(万円)"] = pd.to_numeric(df["価格(万円)"].astype(str).str.replace(",",""), errors="coerce")
+    if "土地面積(坪)" not in df.columns and "土地面積(㎡)" in df.columns:
+        df["土地面積(坪)"] = (pd.to_numeric(df["土地面積(㎡)"], errors="coerce")/3.305785).round(2)
+    if "土地面積(㎡)" not in df.columns and "土地面積(坪)" in df.columns:
+        df["土地面積(㎡)"] = (pd.to_numeric(df["土地面積(坪)"], errors="coerce")*3.305785).round(2)
+    df["土地面積(坪)"] = pd.to_numeric(df["土地面積(坪)"], errors="coerce").round(2)
+    df["坪単価(万円/坪)"] = (df["価格(万円)"]/df["土地面積(坪)"]).round(1)
 
-    df["価格(万円)"]=pd.to_numeric(df["価格(万円)"].astype(str).str.replace(",",""),errors="coerce")
-    if "土地面積(㎡)" not in df.columns:
-        df["土地面積(㎡)"]=pd.to_numeric(df["土地面積(坪)"],errors="coerce")*3.305785
-    if "土地面積(坪)" not in df.columns:
-        df["土地面積(坪)"]=pd.to_numeric(df["土地面積(㎡)"],errors="coerce")/3.305785
-    df["土地面積(坪)"]=df["土地面積(坪)"].round(2)
-    df["坪単価(万円/坪)"]=(df["価格(万円)"]/df["土地面積(坪)"]).round(1)
-
+    # 入力＆距離計算
     st.subheader("① 検索中心の住所を入力")
-    addr=st.text_input("例：浜松市中区高林1丁目")
-    if not addr: st.stop()
-    clat,clon=geocode(addr.strip())
+    addr = st.text_input("例：浜松市中区高林1丁目")
+    if not addr: return
+    clat, clon = geocode(addr.strip())
     if clat is None:
-        st.error("住所が見つかりませんでした。"); return
+        st.error("住所が見つかりません。"); return
+    df["距離(km)"] = df.apply(lambda r: haversine(clat,clon,r.lat,r.lon), axis=1)
 
-    df["距離(km)"]=df.apply(lambda r: haversine(clat,clon,r.lat,r.lon),axis=1)
-
+    # 条件
     with st.sidebar:
         st.header("検索条件")
-        radius=st.slider("検索半径 (km)",0.5,5.0,2.0,0.1)
-        tmin,tmax=st.slider("土地面積 (坪) ※500=500坪以上",0,500,(0,500),step=10)
+        radius = st.slider("検索半径(km)", 0.5,5.0,2.0,0.1)
+        tmin, tmax = st.slider("土地面積(坪) ※500=500坪以上", 0,500,(0,500),step=10)
 
-    cond=(
-       (df["距離(km)"]<=radius)
-       &(df["土地面積(坪)"]>=tmin)
-       &(df["土地面積(坪)"]>30)
+    cond = (
+        (df["距離(km)"]<=radius) &
+        (df["土地面積(坪)"]>=tmin) &
+        (df["土地面積(坪)"]>30)
     )
-    if tmax<500: cond&=df["土地面積(坪)"]<=tmax
-    df_flt=df[cond].copy().sort_values("坪単価(万円/坪)",ascending=False)
+    if tmax<500: cond &= df["土地面積(坪)"]<=tmax
 
+    # **ここで「坪単価降順」でソート**
+    df_flt = df[cond].sort_values("坪単価(万円/坪)", ascending=False)
+
+    # 一覧表示
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
-
-    # ここで見出しだけ入れ替え
-    display_df = df_flt.rename(columns={
-        "土地面積(坪)": "坪単価(万円/坪)_TMP",
-        "坪単価(万円/坪)": "土地面積(坪)"
-    })
-    display_df = display_df.rename(columns={"坪単価(万円/坪)_TMP": "坪単価(万円/坪)"})
-
     table_cols = [
         c for c in
-        ["所在地","日付","距離(km)","価格(万円)","坪単価(万円/坪)","土地面積(坪)","登録会員","TEL"]
-        if c in display_df.columns
+        ["所在地","日付","距離(km)","価格(万円)","土地面積(坪)","坪単価(万円/坪)","登録会員","TEL"]
+        if c in df_flt.columns
     ]
-    st.dataframe(display_df[table_cols], height=320)
+    st.dataframe(df_flt[table_cols], height=320)
 
-    if display_df.empty:
-        st.info("該当物件がありません。"); return
+    # 地図
+    if df_flt.empty:
+        st.info("該当物件がありません。")
+        return
 
-    m=folium.Map(location=[clat,clon],zoom_start=14,control_scale=True)
-    folium.Marker([clat,clon],tooltip="検索中心",
-                  icon=folium.Icon(color="red",icon="star")).add_to(m)
-    for _,r in display_df.iterrows():
-        raw=r["価格(万円)"]
-        try: price=f"{float(raw):,}"
-        except: price="-"
-        popup=(
-          f"<b>{r['所在地']}</b><br>"
-          + (f"日付：{r.get('日付')}<br>" if "日付" in r else "")
-          + f"価格：{price} 万円<br>"
-          + f"坪単価：{r['坪単価(万円/坪)']:.1f} 万円/坪<br>"
-          + f"土地面積：{r['土地面積(坪)']:.1f} 坪<br>"
-          + f"登録会員：{r.get('登録会員','-')}<br>"
-          + f"TEL：{r.get('TEL','-')}"
+    m = folium.Map(location=[clat,clon], zoom_start=14, control_scale=True)
+    folium.Marker([clat,clon], tooltip="検索中心", icon=folium.Icon(color="red", icon="star")).add_to(m)
+    for _, r in df_flt.iterrows():
+        raw = r["価格(万円)"]
+        try: price = f"{float(raw):,}"
+        except: price = "-"
+        popup = (
+            f"<b>{r['所在地']}</b><br>"
+            + (f"日付：{r.get('日付')}<br>" if "日付" in r else "")
+            + f"価格：{price} 万円<br>"
+            + f"坪単価：{r['坪単価(万円/坪)']:.1f} 万円/坪<br>"
+            + f"土地面積：{r['土地面積(坪)']:.1f} 坪<br>"
+            + f"登録会員：{r.get('登録会員','-')}<br>"
+            + f"TEL：{r.get('TEL','-')}"
         )
-        folium.Marker([r.lat,r.lon],
-                      popup=folium.Popup(popup,max_width=260),
-                      tooltip=r["所在地"],
-                      icon=folium.Icon(color="blue",icon="home",prefix="fa")
+        folium.Marker([r.lat,r.lon], popup=folium.Popup(popup, max_width=260),
+                      tooltip=r["所在地"], icon=folium.Icon(color="blue", icon="home", prefix="fa")
         ).add_to(m)
 
     st.markdown("**③ 地図で確認**")
-    st_folium(m,width="100%",height=600)
+    st_folium(m, width="100%", height=600)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
