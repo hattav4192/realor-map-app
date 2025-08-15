@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """app_mobile.py – Streamlit 売土地検索ツール（モバイル版）
-2025-08-16 rev7
+2025-08-16 rev8
 
-- 吹き出しに「日付」を確実に表示（NaN/空文字/NaT/None/- を安全処理）
-- 一覧の「選択」列のみ編集可（他列は編集不可）に修正
-- 一覧の該当行を選ぶとピンを緑で強調
-- 日付カラム候補を拡張し、必ず「日付」列に正規化
+- マップは flt（緯度経度あり）で描画し、選択インデックスは edited から取得
+- 一覧の日付は空→「-」表示、ポップアップは空なら非表示
+- 行選択で該当ピンを緑で強調
 - スマホ向け：スライダー常時表示、面積上限500=500坪以上
 - 60坪以下の物件は初期除外
 """
@@ -183,40 +182,40 @@ if max_t < MAX_TSUBO_UI:
     cond &= _df["土地面積（坪）"] <= max_t
 
 flt = _df[cond].copy()
-flt = flt.sort_values("坪単価（万円/坪）", ascending=False).reset_index(drop=True)
+flt = flt.sort_values("坪単価（万円/坪）", ascending=False)  # indexは0..n-1のまま
+flt["距離(km)"] = flt["距離(km)"].round(2)
+
+# 一覧での見栄え用：日付が空なら「-」表示（ポップアップは空扱いにするのでOK）
+flt["日付"] = flt["日付"].apply(lambda x: x if x else "-")
 
 # ────────────────────────────────────────────────
 # 一覧テーブル（行クリック＝選択 → ピン強調）
 # ------------------------------------------------
 st.markdown(f"**② 検索結果：{len(flt)} 件**")
 
-# 表示列
 cols_order = [
     "住所", "日付", "距離(km)", "登録価格（万円）", "坪単価（万円/坪）",
     "土地面積（坪）", "用途地域", "取引態様", "登録会員", "TEL",
 ]
 cols = [c for c in cols_order if c in flt.columns]
 
-# 距離整形
-flt["距離(km)"] = flt["距離(km)"].round(2)
-
 # 「選択」列を先頭に追加（初期 False）
 if "選択" not in flt.columns:
     flt.insert(0, "選択", False)
 
-# セッションに選択インデックスを保持（単一選択）
+# 直前の選択を反映（セッション保持）
 sel_key = "selected_row_index"
 if sel_key not in st.session_state:
     st.session_state[sel_key] = None
-
-# 直前の選択を反映
 if st.session_state[sel_key] is not None and 0 <= st.session_state[sel_key] < len(flt):
     flt.loc[:, "選択"] = False
     flt.at[st.session_state[sel_key], "選択"] = True
 
-# 「選択」だけ編集可、他は編集不可
+# 表示用のテーブル（緯度経度は含めない）
+table_df = flt[["選択"] + [c for c in cols if c != "選択"]]
+
 edited = st.data_editor(
-    flt[["選択"] + [c for c in cols if c != "選択"]],
+    table_df,
     hide_index=True,
     height=320,
     use_container_width=True,
@@ -224,13 +223,12 @@ edited = st.data_editor(
         "選択": st.column_config.CheckboxColumn(
             "選択（1件のみ）", help="クリックで行を選択", disabled=False
         ),
-        # そのほかの列は既定で disabled=True（下の disabled=True と組み合わせ）
     },
-    disabled=True,  # ← これがポイント：全体は編集不可にし、上で「選択」だけ有効化
+    disabled=True,  # 全体は編集不可、上で「選択」だけ許可
     key="editor_table",
 )
 
-# 単一選択に正規化
+# 単一選択に正規化 & インデックス取得（この index は flt の index と一致）
 true_rows = edited.index[edited["選択"] == True].to_list()
 if len(true_rows) > 1:
     keep = true_rows[0]
@@ -255,20 +253,19 @@ folium.Marker(
     icon=folium.Icon(color="red", icon="star"),
 ).add_to(m)
 
-# 地図の表示範囲（bounds）用に座標を収集
 bounds = [[center_lat, center_lon]]
 
-# ピン描画
-for i, r in edited.reset_index(drop=True).iterrows():
-    # 価格フォーマット
+# ここは flt で回す（緯度経度あり）
+for idx, r in flt.iterrows():
+    # 価格
     raw_price = r.get("登録価格（万円）", r.get("価格(万円)", None))
     try:
         price_fmt = f"{float(raw_price):,.0f}"
     except (TypeError, ValueError):
         price_fmt = "-"
 
-    # 日付
-    date_txt = _fmt_date(r.get("日付", ""))
+    # 日付（一覧では「-」にしているが、ポップアップでは空扱いにする）
+    date_txt = _fmt_date(r.get("日付", ""))  # 「-」→ "" に変換される
 
     # ポップアップ HTML
     popup_parts = [f"<b>{r.get('住所', '-')}</b>"]
@@ -276,19 +273,24 @@ for i, r in edited.reset_index(drop=True).iterrows():
         popup_parts.append(f"日付：{date_txt}")
     popup_parts.append(f"価格：{price_fmt} 万円")
     if pd.notna(r.get("土地面積（坪）")):
-        popup_parts.append(f"面積：{r['土地面積（坪）']:.1f} 坪")
+        popup_parts.append(f"面積：{float(r['土地面積（坪）']):.1f} 坪")
     if pd.notna(r.get("坪単価（万円/坪）")):
         popup_parts.append(
-            f"<span style='color:#d46b08;'>坪単価：{r['坪単価（万円/坪）']:.1f} 万円/坪</span>"
+            f"<span style='color:#d46b08;'>坪単価：{float(r['坪単価（万円/坪）']):.1f} 万円/坪</span>"
         )
     popup_parts.append(f"登録会員：{r.get('登録会員', '-')}")
     popup_parts.append(f"TEL：{r.get('TEL', '-')}")
     popup_html = "<br>".join(popup_parts)
 
-    # 選択行は緑、それ以外は青
-    color = "green" if (selected_idx is not None and i == selected_idx) else "blue"
+    # ピン色
+    color = "green" if (selected_idx is not None and idx == selected_idx) else "blue"
 
-    lat, lon = float(r["latitude"]), float(r["longitude"])
+    # 座標（欠損ガード）
+    try:
+        lat, lon = float(r["latitude"]), float(r["longitude"])
+    except Exception:
+        continue  # 座標欠損行はスキップ
+
     folium.Marker(
         [lat, lon],
         popup=folium.Popup(popup_html, max_width=260),
