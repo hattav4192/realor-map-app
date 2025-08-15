@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """app_mobile.py – Streamlit 売土地検索ツール（モバイル版）
-2025-08-16 rev6
+2025-08-16 rev7
 
 - 吹き出しに「日付」を確実に表示（NaN/空文字/NaT/None/- を安全処理）
-- 一覧表で該当行をクリック（選択）すると、マップの該当ピンを緑色で強調
-- スマホ画面向け：スライダー常時表示、面積上限500=500坪以上
+- 一覧の「選択」列のみ編集可（他列は編集不可）に修正
+- 一覧の該当行を選ぶとピンを緑で強調
+- 日付カラム候補を拡張し、必ず「日付」列に正規化
+- スマホ向け：スライダー常時表示、面積上限500=500坪以上
 - 60坪以下の物件は初期除外
 """
 
@@ -68,7 +70,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def _fmt_date(val) -> str:
     """NaN/NaT/None/空文字/'-' を空にし、それ以外は文字列で返す"""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
+    if val is None:
         return ""
     try:
         if pd.isna(val):
@@ -119,12 +121,9 @@ def load_data(path: Path) -> pd.DataFrame:
     df[price_col] = pd.to_numeric(df[price_col].astype(str).str.replace(",", ""), errors="coerce")
     df["坪単価（万円/坪）"] = (df[price_col] / df["土地面積（坪）"]).round(1)
 
-    # 6. 日付列の統一
-    date_src = None
-    for col in ("日付", "掲載日", "更新日", "掲載開始日"):
-        if col in df.columns:
-            date_src = col
-            break
+    # 6. 日付列の統一（候補を広げる）
+    date_candidates = ("日付", "掲載日", "更新日", "掲載開始日", "公開日", "最終更新日", "更新日時")
+    date_src = next((c for c in date_candidates if c in df.columns), None)
     if date_src:
         df["日付"] = df[date_src].map(_fmt_date)
     else:
@@ -184,8 +183,6 @@ if max_t < MAX_TSUBO_UI:
     cond &= _df["土地面積（坪）"] <= max_t
 
 flt = _df[cond].copy()
-
-# 並び順（例：距離近い順 or 坪単価高い順）—従来のままなら坪単価降順
 flt = flt.sort_values("坪単価（万円/坪）", ascending=False).reset_index(drop=True)
 
 # ────────────────────────────────────────────────
@@ -200,8 +197,9 @@ cols_order = [
 ]
 cols = [c for c in cols_order if c in flt.columns]
 
-# 距離・数値整形
+# 距離整形
 flt["距離(km)"] = flt["距離(km)"].round(2)
+
 # 「選択」列を先頭に追加（初期 False）
 if "選択" not in flt.columns:
     flt.insert(0, "選択", False)
@@ -216,24 +214,25 @@ if st.session_state[sel_key] is not None and 0 <= st.session_state[sel_key] < le
     flt.loc[:, "選択"] = False
     flt.at[st.session_state[sel_key], "選択"] = True
 
-# 編集不可にしてクリックしやすく（「選択」だけ編集可）
-disabled_cols = [c for c in cols if c != "選択"]
+# 「選択」だけ編集可、他は編集不可
 edited = st.data_editor(
     flt[["選択"] + [c for c in cols if c != "選択"]],
     hide_index=True,
     height=320,
     use_container_width=True,
     column_config={
-        "選択": st.column_config.CheckboxColumn("選択（1件のみ）", help="クリックで行を選択"),
+        "選択": st.column_config.CheckboxColumn(
+            "選択（1件のみ）", help="クリックで行を選択", disabled=False
+        ),
+        # そのほかの列は既定で disabled=True（下の disabled=True と組み合わせ）
     },
-    disabled=disabled_cols,  # 値の変更を防ぎ、タップで選択しやすく
+    disabled=True,  # ← これがポイント：全体は編集不可にし、上で「選択」だけ有効化
     key="editor_table",
 )
 
-# 「選択」列が複数 True になった場合は先頭のみ残す（単一選択に正規化）
+# 単一選択に正規化
 true_rows = edited.index[edited["選択"] == True].to_list()
 if len(true_rows) > 1:
-    # 先頭のみ True、他は False に修正
     keep = true_rows[0]
     edited.loc[:, "選択"] = False
     edited.at[keep, "選択"] = True
@@ -271,9 +270,8 @@ for i, r in edited.reset_index(drop=True).iterrows():
     # 日付
     date_txt = _fmt_date(r.get("日付", ""))
 
-    # ポップアップ用 HTML を安全に構築
-    popup_parts = []
-    popup_parts.append(f"<b>{r.get('住所', '-')}</b>")
+    # ポップアップ HTML
+    popup_parts = [f"<b>{r.get('住所', '-')}</b>"]
     if date_txt:
         popup_parts.append(f"日付：{date_txt}")
     popup_parts.append(f"価格：{price_fmt} 万円")
@@ -285,7 +283,6 @@ for i, r in edited.reset_index(drop=True).iterrows():
         )
     popup_parts.append(f"登録会員：{r.get('登録会員', '-')}")
     popup_parts.append(f"TEL：{r.get('TEL', '-')}")
-
     popup_html = "<br>".join(popup_parts)
 
     # 選択行は緑、それ以外は青
@@ -301,10 +298,12 @@ for i, r in edited.reset_index(drop=True).iterrows():
 
     bounds.append([lat, lon])
 
-
-# すべてのピンが入るように調整（物件があれば）
+# すべてのピンが入るように
 if len(bounds) > 1:
-    m.fit_bounds(bounds, padding=(20, 20))
+    try:
+        m.fit_bounds(bounds, padding=(20, 20))
+    except Exception:
+        pass
 
 st_folium(m, width="100%", height=480)
 st.caption("Powered by Streamlit ❘ Google Maps Geocoding API")
