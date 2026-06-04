@@ -96,7 +96,7 @@ def load_data(path: Path) -> pd.DataFrame:
 
     # 2. 列名整形
     df.columns = df.columns.str.strip()
-    df = df.rename(columns={"lat": "latitude", "lng": "longitude"})
+    df = df.rename(columns={"lat": "latitude", "lng": "longitude", "所在地": "住所"})
 
     if not {"latitude", "longitude"}.issubset(df.columns):
         st.error("CSVに latitude/longitude 列が見当たりません。")
@@ -260,7 +260,8 @@ for idx, r in flt.iterrows():
     # 価格
     raw_price = r.get("登録価格（万円）", r.get("価格(万円)", None))
     try:
-        price_fmt = f"{float(raw_price):,.0f}"
+        val = float(raw_price)
+        price_fmt = f"{val:,.0f}" if val > 0 else "-"
     except (TypeError, ValueError):
         price_fmt = "-"
 
