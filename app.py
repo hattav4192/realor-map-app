@@ -106,7 +106,35 @@ def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # ──────────────────────────────────────────────
 def main():
-    st.set_page_config(page_title="売土地検索ツール", layout="wide")
+    st.set_page_config(page_title="売土地検索ツール", page_icon="🏡", layout="wide")
+
+    # iPhoneホーム画面アイコン（Apple Touch Icon）
+    _ICON_B64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAEC0lEQVR4nO3dXU7bQBSGYYO6h160"
+        "+0AqW2nXUAnhVQQhsQbW0ovuY266i0qkjQLOZ9nOjOf8vM8VQiHEZ96MkxCRmy/fvg/AJbcXvwsQ"
+        "B+YQByTigEQckIgDEnFAIg5IxAGJOCARByTigEQckIgDEnFAIg5IxAGJOCARByTigEQckIgDEnFA"
+        "Ig5IxAGJOCARByTieKf8eu19Ewwhjo9l0McJcfxz3gR9HBHH5RoKfRDHTAclfR/Z45gvoOTuI3Uc"
+        "S9a+JO4jbxzLV71k7SNpHGvXu6TsI2Mc21a65OvjJtt/E7xyjb/e/9h8Vec/60KuneP6e3/JtH8k"
+        "iqPWupY0fWSJo+6Klhx9pIijxVqWBH3EjyPDKjYSPw5sFjwOto1rRI6DMq4UNg7KuF7MOCijioBx"
+        "UEYt0eKgjIpCxUEZdcWJgzKqCxIHZbQQIQ7KaMR9HJTRju84KKMpx3FQRmte46CMHbiMgzL24S8O"
+        "v2UUb7fcWRzu5uv69nuKw9dkAxyFmzgczTTMsfiIw8s0gx2RgzhczDHkcVmPw/4EAx+d6TiMzy78"
+        "MdqNw/LUkhyp0TjMzivV8VqMw+akEh61uTgMzijtsduKw9p0kk/AUBym5tKRnTlYicPORCwoNqZh"
+        "JQ4YZCIOI3cUU4qBmfSPw8IUbCq9J3Ob/PiNK13n0zMOyjA+pW5xUIb9WfWJgzJcTKxDHJThZW57"
+        "x0EZjqa3axyU4WuG+8VBGe4muVMclOFxnnvEQRlOp9o8DsrwO9u2cVBGa00n3DAOythHuzl3/gBA"
+        "ArL8sYH9/2QPs4gDEnFAIg5IxAGJOCARByTigEQckIgDEnFAIg5IxAFvr5Aaf79dyfHuRnYOSMQB"
+        "iTggEQck4oBEHJCIAxJxwNuLYAbfMxf+lk+xc0AiDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAYk4"
+        "IBEHJOKARByQiAMScUAiDkjEAYk4IBEHJOKARByQiAMScUAiDkjEAYk4IBEHrH4iNSxj54BEHJCI"
+        "AxJxIGUc4/NT3cuP4gJrf5EXkeNAzH8Yt9aq+/Th4bHWLz1UuiqbgsRxcZF2XrzxLcRIuXBaWWR8"
+        "fjqu/emL6QUiZRHtFdKFjwpPS7j28sOkgPNrOH4/WCJBTisb9vPp5Zcv7fg/i1MTQ0ScVrY4PDxG"
+        "2iGC7xyr7rsZ1rWKIHEsX/J2p4Ax3Mkl5mnlfJ3qrtkonq2EPNcE2TmWr8q29RvfPwJNIuDOMf+k"
+        "Y9tGcnjbFdTVque33gXZOdY+He3ycrs7QV4Em9/2Pyx5xcUeQ8cUJA60EPAxB2ohDkjEAYk4IBEH"
+        "JOKARByQiAMScUAiDgzKX+nMdDUJ3qNWAAAAAElFTkSuQmCC"
+    )
+    st.markdown(
+        f'<link rel="apple-touch-icon" href="data:image/png;base64,{_ICON_B64}">',
+        unsafe_allow_html=True,
+    )
+
     st.title("🏡 売土地検索ツール")
 
     if not CSV_PATH.exists():
