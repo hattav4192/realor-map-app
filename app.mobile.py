@@ -272,7 +272,7 @@ for idx, r in flt.iterrows():
     popup_parts = [f"<b>{r.get('住所', '-')}</b>"]
     if date_txt:
         popup_parts.append(f"日付：{date_txt}")
-    popup_parts.append(f"価格：{price_fmt} 万円")
+    popup_parts.append(f"価格：{price_fmt} 万円" if price_fmt != "-" else "価格：要確認")
     if pd.notna(r.get("土地面積（坪）")):
         popup_parts.append(f"面積：{float(r['土地面積（坪）']):.1f} 坪")
     if pd.notna(r.get("坪単価（万円/坪）")):
