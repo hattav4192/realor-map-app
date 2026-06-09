@@ -221,10 +221,10 @@ edited = st.data_editor(
     use_container_width=True,
     column_config={
         "選択": st.column_config.CheckboxColumn(
-            "選択（1件のみ）", help="クリックで行を選択", disabled=False
+            "選択", help="タップで選択・地図のピンが緑に変わります", disabled=False
         ),
     },
-    disabled=True,  # 全体は編集不可、上で「選択」だけ許可
+    disabled=[c for c in table_df.columns if c != "選択"],  # 選択列以外は編集不可
     key="editor_table",
 )
 
