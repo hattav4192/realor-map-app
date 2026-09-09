@@ -23,6 +23,8 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 
+import market_layer as ml   # 実勢価格レイヤー（国交省データ）
+
 # ────────────────────────────────────────────────
 # 🔑 Google Maps API Key
 # ------------------------------------------------
@@ -188,13 +190,21 @@ flt["距離(km)"] = flt["距離(km)"].round(2)
 # 一覧での見栄え用：日付が空なら「-」表示（ポップアップは空扱いにするのでOK）
 flt["日付"] = flt["日付"].apply(lambda x: x if x else "-")
 
+# ── 実勢相場パネル ＋ 各物件の「周辺相場比」列 ─────────────
+_mkt = ml.render_market_panel(center_lat, center_lon, radius_km, compact=True)
+_bench = _mkt.get("benchmark")
+if _bench:
+    flt["周辺相場比"] = flt["坪単価（万円/坪）"].apply(
+        lambda p: ml.deviation_label(ml.deviation_pct(p, _bench))
+    )
+
 # ────────────────────────────────────────────────
 # 一覧テーブル（行クリック＝選択 → ピン強調）
 # ------------------------------------------------
 st.markdown(f"**② 検索結果：{len(flt)} 件**")
 
 cols_order = [
-    "住所", "日付", "距離(km)", "登録価格（万円）", "坪単価（万円/坪）",
+    "住所", "日付", "距離(km)", "登録価格（万円）", "坪単価（万円/坪）", "周辺相場比",
     "土地面積（坪）", "用途地域", "取引態様", "登録会員", "TEL",
 ]
 cols = [c for c in cols_order if c in flt.columns]
@@ -307,6 +317,9 @@ if len(bounds) > 1:
         m.fit_bounds(bounds, padding=(20, 20))
     except Exception:
         pass
+
+# 実勢価格レイヤー（取引事例＝紫の点 / 地価公示＝オレンジのピン）
+ml.add_market_markers(m, _mkt.get("tori_near"), _mkt.get("kouji_near"))
 
 st_folium(m, width="100%", height=480)
 st.caption("Powered by Streamlit ❘ Google Maps Geocoding API")

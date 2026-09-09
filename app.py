@@ -24,6 +24,8 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 
+import market_layer as ml   # 実勢価格レイヤー（国交省データ）
+
 # ──────────────────────────────────────────────
 # APIキー読み込み
 try:
@@ -176,14 +178,17 @@ def main():
     # 坪単価降順でソート
     df_flt = df[cond].sort_values("坪単価(万円/坪)", ascending=False)
 
-    # 【根本修正】２列を物理的に入れ替える
-    tmp = df_flt["坪単価(万円/坪)"].copy()
-    df_flt["坪単価(万円/坪)"]   = df_flt["土地面積(坪)"]
-    df_flt["土地面積(坪)"]     = tmp
+    # ── 実勢相場パネル ＋ 各物件の「周辺相場比」列 ─────────────
+    _mkt = ml.render_market_panel(clat, clon, radius)
+    _bench = _mkt.get("benchmark")
+    if _bench:
+        df_flt["周辺相場比"] = df_flt["坪単価(万円/坪)"].apply(
+            lambda p: ml.deviation_label(ml.deviation_pct(p, _bench))
+        )
 
-    # テーブル表示：価格 → 坪単価 → 土地面積
+    # テーブル表示：価格 → 坪単価 → 周辺相場比 → 土地面積
     st.subheader(f"② 検索結果：{len(df_flt):,} 件")
-    cols_order = ["所在地","日付","距離(km)","価格(万円)","坪単価(万円/坪)","土地面積(坪)","登録会員","TEL"]
+    cols_order = ["所在地","日付","距離(km)","価格(万円)","坪単価(万円/坪)","周辺相場比","土地面積(坪)","登録会員","TEL"]
     display_cols = [c for c in cols_order if c in df_flt.columns]
     st.dataframe(df_flt[display_cols], height=300)
 
@@ -212,6 +217,9 @@ def main():
                       tooltip=r["所在地"],
                       icon=folium.Icon(color="blue", icon="home", prefix="fa")
         ).add_to(m)
+
+    # 実勢価格レイヤー（取引事例＝紫の点 / 地価公示＝オレンジのピン）
+    ml.add_market_markers(m, _mkt.get("tori_near"), _mkt.get("kouji_near"))
 
     st.markdown("**③ 地図で確認**")
     st_folium(m, width="100%", height=600)
